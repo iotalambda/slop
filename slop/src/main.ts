@@ -4,7 +4,7 @@ import {
   CreateBox,
   KeyboardEventTypes,
   MeshBuilder,
-  PhysicsBody,
+  PhysicsEngine,
   PhysicsImpostor,
   UniversalCamera,
 } from "@babylonjs/core";
@@ -26,15 +26,16 @@ const gravityVector = new Vector3(0, 2 * -9.81, 0);
 const physicsPlugin = new CannonJSPlugin(true, 10, CANNON);
 scene.enablePhysics(gravityVector, physicsPlugin);
 
-const player = MeshBuilder.CreateBox(
+const player = MeshBuilder.CreateCylinder(
   "player",
-  { width: 0.5, height: 1.8, depth: 0.5 },
+  { height: 1.8, diameter: 3 },
   scene
 );
+player.isVisible = false;
 player.position = new Vector3(0, 2, 0);
 player.physicsImpostor = new PhysicsImpostor(
   player,
-  PhysicsImpostor.BoxImpostor,
+  PhysicsImpostor.CylinderImpostor,
   {
     mass: 5,
     restitution: 0,
@@ -64,6 +65,8 @@ let canJump = false;
 scene.onBeforeRenderObservable.add(() => {
   let moveDirection = new Vector3(0, 0, 0);
   const forward = camera.getDirection(Vector3.Forward());
+  forward.y = 0;
+  forward.normalize;
   const right = camera.getDirection(Vector3.Right());
 
   if (inputMap["w"]) moveDirection.addInPlace(forward);
@@ -92,9 +95,33 @@ light.intensity = 0.7;
 
 var material = new GridMaterial("grid", scene);
 
-// var sphere = CreateBox("box1", { width: 3, height: 3, depth: 2 }, scene);
-// sphere.position.y = 2;
-// sphere.material = material;
+function addBox(
+  width: number,
+  height: number,
+  depth: number,
+  x: number,
+  z: number
+) {
+  var box1 = CreateBox(
+    "box1",
+    { width: width, height: height, depth: depth },
+    scene
+  );
+  box1.position = new Vector3(x, height / 2, z);
+  box1.material = material;
+  box1.physicsImpostor = new PhysicsImpostor(
+    box1,
+    PhysicsImpostor.BoxImpostor,
+    { mass: 0 },
+    scene
+  );
+}
+
+addBox(10, 30, 7, 30, 10);
+addBox(4, 8, 4, 24, 19);
+addBox(4, 14, 2, 15, 28);
+addBox(2, 20, 4, 15, 20);
+addBox(8, 40, 8, 10, 40);
 
 var ground = CreateGround(
   "ground1",
@@ -113,9 +140,17 @@ player.physicsImpostor.registerBeforePhysicsStep((impostor) => {
   impostor.setAngularVelocity(Vector3.Zero());
 });
 
-player.physicsImpostor.registerOnPhysicsCollide(ground.physicsImpostor, () => {
-  canJump = true;
-});
+player.physicsImpostor.registerOnPhysicsCollide(
+  (scene.getPhysicsEngine()! as PhysicsEngine).getImpostors(),
+  (collider, collidedWith) => {
+    const contactNormal = collider.object.position.subtract(
+      collidedWith.object.position
+    );
+    if (contactNormal.y > 0) {
+      canJump = true;
+    }
+  }
+);
 
 engine.runRenderLoop(() => {
   scene.render();
