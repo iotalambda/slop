@@ -9,14 +9,14 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/cannon": "^0.1.13",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   },
   "dependencies": {
-    "@babylonjs/core": "^7.53.3",
-    "@babylonjs/loaders": "^7.53.3",
-    "@babylonjs/materials": "^7.53.3",
-    "cannon": "^0.6.2"
+    "@babylonjs/core": "^8.8.5",
+    "@babylonjs/gui": "^8.8.5",
+    "@babylonjs/havok": "^1.3.10",
+    "@babylonjs/loaders": "^8.8.5",
+    "@babylonjs/materials": "^8.8.5"
   }
 }

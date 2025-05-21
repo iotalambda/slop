@@ -1,165 +1,99 @@
 import {
-  ActionManager,
-  CannonJSPlugin,
-  CreateBox,
-  KeyboardEventTypes,
+  CharacterSupportedState,
+  Color3,
+  Engine,
+  HavokPlugin,
+  HemisphericLight,
   MeshBuilder,
-  PhysicsEngine,
-  PhysicsImpostor,
+  PhysicsAggregate,
+  PhysicsCharacterController,
+  PhysicsShapeType,
+  Scene,
+  StandardMaterial,
   UniversalCamera,
+  Vector3,
 } from "@babylonjs/core";
-import { Engine } from "@babylonjs/core/Engines/engine";
-import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
-import { Scene } from "@babylonjs/core/scene";
-import "@babylonjs/loaders";
+import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
+import HavokPhysics from "@babylonjs/havok";
 
-import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
-import * as CANNON from "cannon";
-
+const hp = await HavokPhysics();
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 const engine = new Engine(canvas, true);
+const hk = new HavokPlugin(false, hp);
 const scene = new Scene(engine);
+const camera = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
+camera.setTarget(new Vector3(0, 15, 0));
+camera.attachControl();
+const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
+light.intensity = 0.5;
 
-const gravityVector = new Vector3(0, 2 * -9.81, 0);
-const physicsPlugin = new CannonJSPlugin(true, 10, CANNON);
-scene.enablePhysics(gravityVector, physicsPlugin);
+scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
 
-const player = MeshBuilder.CreateCylinder(
-  "player",
-  { height: 1.8, diameter: 3 },
-  scene
-);
-player.isVisible = false;
-player.position = new Vector3(0, 2, 0);
-player.physicsImpostor = new PhysicsImpostor(
-  player,
-  PhysicsImpostor.CylinderImpostor,
+const ground = MeshBuilder.CreateGround("ground", { width: 32, height: 32 }, scene);
+new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0 }, scene);
+const groundMat = new StandardMaterial("groundMat", scene);
+groundMat.diffuseColor = Color3.Green();
+ground.material = groundMat;
+
+const characterGravity = new Vector3(0, -9.81, 0);
+
+const characterCapsule = MeshBuilder.CreateCapsule(
+  "character",
   {
-    mass: 5,
-    restitution: 0,
-    friction: 0.2,
+    height: 2,
+    radius: 0.5,
   },
   scene
 );
+const characterController = new PhysicsCharacterController(new Vector3(0, 30, 0), { capsuleHeight: 2, capsuleRadius: 0.5 }, scene);
 
-const camera = new UniversalCamera("camera", player.position, scene);
-camera.rotationQuaternion = new Quaternion();
-camera.attachControl(canvas, false);
-camera.parent = player;
+const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
+const debugGuiTextBlock1 = new TextBlock("debug1", "...");
+debugGuiTextBlock1.fontSize = 24;
+debugGuiTextBlock1.top = -300;
+debugGuiTextBlock1.left = -500;
+debugGuiTextBlock1.color = "white";
+debugGui.addControl(debugGuiTextBlock1);
+const debugGuiTextBlock2 = new TextBlock("debug2", "...");
+debugGuiTextBlock2.fontSize = 24;
+debugGuiTextBlock2.top = -270;
+debugGuiTextBlock2.left = -500;
+debugGuiTextBlock2.color = "white";
+debugGui.addControl(debugGuiTextBlock2);
 
-const inputMap: { [key: string]: boolean } = {};
-scene.actionManager = new ActionManager(scene);
-
-scene.onKeyboardObservable.add((kbInfo) => {
-  const key = kbInfo.event.key.toLowerCase();
-  if (kbInfo.type === KeyboardEventTypes.KEYDOWN) inputMap[key] = true;
-  if (kbInfo.type === KeyboardEventTypes.KEYUP) inputMap[key] = false;
+scene.onBeforeRenderObservable.add((scene) => {
+  characterCapsule.position.copyFrom(characterController.getPosition());
 });
 
-const moveSpeed = 20;
-const jumpForce = 20;
-let canJump = false;
+scene.onAfterRenderObservable.add((scene) => {
+  if (scene.deltaTime == undefined) return;
+  const dt = scene.deltaTime / 1000.0;
+  if (dt == 0) return;
 
-scene.onBeforeRenderObservable.add(() => {
-  let moveDirection = new Vector3(0, 0, 0);
-  const forward = camera.getDirection(Vector3.Forward());
-  forward.y = 0;
-  forward.normalize;
-  const right = camera.getDirection(Vector3.Right());
-
-  if (inputMap["w"]) moveDirection.addInPlace(forward);
-  if (inputMap["s"]) moveDirection.addInPlace(forward.scale(-1));
-  if (inputMap["a"]) moveDirection.addInPlace(right.scale(-1));
-  if (inputMap["d"]) moveDirection.addInPlace(right);
-
-  moveDirection.normalize().scaleInPlace(moveSpeed);
-
-  player.physicsImpostor?.setLinearVelocity(
-    new Vector3(
-      moveDirection.x,
-      player.physicsImpostor.getLinearVelocity()?.y,
-      moveDirection.z
-    )
-  );
-
-  if (inputMap[" "] && canJump) {
-    canJump = false;
-    player.physicsImpostor?.setLinearVelocity(new Vector3(0, jumpForce, 0));
-  }
-});
-
-var light = new HemisphericLight("light1", new Vector3(0, 1, 0), scene);
-light.intensity = 0.7;
-
-var material = new GridMaterial("grid", scene);
-
-function addBox(
-  width: number,
-  height: number,
-  depth: number,
-  x: number,
-  z: number
-) {
-  var box1 = CreateBox(
-    "box1",
-    { width: width, height: height, depth: depth },
-    scene
-  );
-  box1.position = new Vector3(x, height / 2, z);
-  box1.material = material;
-  box1.physicsImpostor = new PhysicsImpostor(
-    box1,
-    PhysicsImpostor.BoxImpostor,
-    { mass: 0 },
-    scene
-  );
-}
-
-addBox(10, 30, 7, 30, 10);
-addBox(4, 8, 4, 24, 19);
-addBox(4, 14, 2, 15, 28);
-addBox(2, 20, 4, 15, 20);
-addBox(8, 40, 8, 10, 40);
-
-var ground = CreateGround(
-  "ground1",
-  { width: 80, height: 80, subdivisions: 2 },
-  scene
-);
-ground.material = material;
-ground.physicsImpostor = new PhysicsImpostor(
-  ground,
-  PhysicsImpostor.BoxImpostor,
-  { mass: 0 },
-  scene
-);
-
-player.physicsImpostor.registerBeforePhysicsStep((impostor) => {
-  impostor.setAngularVelocity(Vector3.Zero());
-});
-
-player.physicsImpostor.registerOnPhysicsCollide(
-  (scene.getPhysicsEngine()! as PhysicsEngine).getImpostors(),
-  (collider, collidedWith) => {
-    const contactNormal = collider.object.position.subtract(
-      collidedWith.object.position
+  const support = characterController.checkSupport(dt, Vector3.DownReadOnly);
+  let velocity: Vector3;
+  const prevVelocity = characterController.getVelocity();
+  if (support.supportedState === CharacterSupportedState.UNSUPPORTED) {
+    velocity = characterController.calculateMovement(
+      dt,
+      Vector3.RightHandedForwardReadOnly,
+      Vector3.UpReadOnly,
+      prevVelocity,
+      Vector3.ZeroReadOnly,
+      Vector3.ZeroReadOnly,
+      Vector3.UpReadOnly
     );
-    if (contactNormal.y > 0) {
-      canJump = true;
-    }
+    velocity.addInPlace(Vector3.UpReadOnly.scale(-velocity.dot(Vector3.UpReadOnly)));
+    velocity.addInPlace(Vector3.UpReadOnly.scale(prevVelocity.dot(Vector3.UpReadOnly)));
+    velocity.addInPlace(characterGravity.scale(dt));
+  } else {
+    velocity = Vector3.ZeroReadOnly;
   }
-);
+  characterController.setVelocity(velocity);
+  characterController.integrate(dt, support, characterGravity);
+  debugGuiTextBlock1.text = `${velocity.x.toPrecision(2)},${velocity.y.toPrecision(2)},${velocity.z.toPrecision(2)}`;
+});
 
 engine.runRenderLoop(() => {
   scene.render();
-});
-
-canvas.addEventListener("click", () => {
-  canvas.requestPointerLock();
-});
-
-window.addEventListener("resize", () => {
-  engine.resize();
 });
