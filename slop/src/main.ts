@@ -1,4 +1,5 @@
 import {
+  ArcRotateCamera,
   Camera,
   Color3,
   Engine,
@@ -29,19 +30,6 @@ HavokPhysics().then((hp) => {
   const engine = new Engine(canvas, true);
   const hk = new HavokPlugin(false, hp);
   const scene = new Scene(engine);
-
-  let camera: Camera;
-  function replaceWithFirstPersonCamera() {
-    if (!!camera) {
-      camera.dispose();
-    }
-    const c = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
-    c.attachControl();
-    c.minZ = 0;
-    camera = c;
-    return c;
-  }
-  camera = replaceWithFirstPersonCamera();
 
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
@@ -78,6 +66,28 @@ HavokPhysics().then((hp) => {
   characterFeetAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
   characterFeetAgg.body.disablePreStep = false;
   characterFeetAgg.shape.isTrigger = true;
+
+  let camera: Camera;
+  function replaceWithFirstPersonCamera() {
+    if (camera?.isDisposed() === false) {
+      camera.dispose();
+    }
+    const c = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
+    c.rotation.y = characterOrientationQuaternion.toEulerAngles().y;
+    c.attachControl();
+    c.minZ = 0;
+    camera = c;
+  }
+  function replaceWithArcRotateCamera() {
+    if (camera?.isDisposed() === false) {
+      camera.dispose();
+    }
+    const c = new ArcRotateCamera("cam", -characterOrientationQuaternion.toEulerAngles().y - Math.PI / 2, 0.5, 10, characterAgg.transformNode.position, scene);
+    c.attachControl();
+    c.minZ = 0;
+    camera = c;
+  }
+  replaceWithFirstPersonCamera();
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
@@ -154,8 +164,9 @@ HavokPhysics().then((hp) => {
   debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
     ev.skipNextObservers = true;
     if (v) {
+      replaceWithArcRotateCamera();
     } else {
-      camera = replaceWithFirstPersonCamera();
+      replaceWithFirstPersonCamera();
     }
   });
   debugToggleCameraPanel.addControl(debugToggleCameraCheckbox);
@@ -167,12 +178,12 @@ HavokPhysics().then((hp) => {
   debugToggleCameraTextBlock.paddingLeftInPixels = 5;
   debugToggleCameraPanel.addControl(debugToggleCameraTextBlock);
 
-  // const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
-  // debugGuiTextBlock1.height = "30px";
-  // debugGuiTextBlock1.color = "white";
-  // debugGuiTextBlock1.fontSize = 20;
-  // debugGuiTextBlock1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-  // debugPanel.addControl(debugGuiTextBlock1);
+  const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
+  debugGuiTextBlock1.height = "30px";
+  debugGuiTextBlock1.color = "white";
+  debugGuiTextBlock1.fontSize = 20;
+  debugGuiTextBlock1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugPanel.addControl(debugGuiTextBlock1);
 
   // const debugGuiTextBlock2 = new TextBlock("debug2", "debug2");
   // debugGuiTextBlock2.height = "30px";
@@ -224,6 +235,12 @@ HavokPhysics().then((hp) => {
     if (camera instanceof UniversalCamera) {
       velocity = characterInputDirection
         .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion))
+        .normalize()
+        .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
+    } else if (camera instanceof ArcRotateCamera) {
+      debugGuiTextBlock1.text = `${camera.alpha}`;
+      velocity = characterInputDirection
+        .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, -camera.alpha - Math.PI / 2, 0, characterOrientationQuaternion))
         .normalize()
         .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
     } else {
