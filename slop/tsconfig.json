@@ -20,7 +20,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "types": ["@babylonjs/core", "@babylonjs/loaders", "@babylonjs/materials"]
+    "types": ["@babylonjs/core", "@babylonjs/inspector", "@babylonjs/loaders", "@babylonjs/materials"]
   },
   "include": ["src"]
 }

@@ -1,5 +1,5 @@
 import {
-  CharacterSupportedState,
+  Camera,
   Color3,
   Engine,
   HavokPlugin,
@@ -9,10 +9,8 @@ import {
   MeshBuilder,
   PhysicsAggregate,
   PhysicsBody,
-  PhysicsCharacterController,
   PhysicsEventType,
   PhysicsMotionType,
-  PhysicsPrestepType,
   PhysicsShapeType,
   PhysicsViewer,
   Quaternion,
@@ -21,8 +19,9 @@ import {
   UniversalCamera,
   Vector3,
 } from "@babylonjs/core";
-import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Checkbox, Control, StackPanel, TextBlock } from "@babylonjs/gui";
 import HavokPhysics from "@babylonjs/havok";
+import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
 
 HavokPhysics().then((hp) => {
@@ -30,9 +29,20 @@ HavokPhysics().then((hp) => {
   const engine = new Engine(canvas, true);
   const hk = new HavokPlugin(false, hp);
   const scene = new Scene(engine);
-  const camera = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
-  camera.attachControl();
-  camera.minZ = 0;
+
+  let camera: Camera;
+  function replaceWithFirstPersonCamera() {
+    if (!!camera) {
+      camera.dispose();
+    }
+    const c = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
+    c.attachControl();
+    c.minZ = 0;
+    camera = c;
+    return c;
+  }
+  camera = replaceWithFirstPersonCamera();
+
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
 
@@ -118,19 +128,58 @@ HavokPhysics().then((hp) => {
   const physicsViewer = new PhysicsViewer();
   // physicsViewer.showBody(platform1Agg.body);
 
-  const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
-  const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
-  debugGuiTextBlock1.fontSize = 24;
-  debugGuiTextBlock1.top = -300;
-  debugGuiTextBlock1.left = -500;
-  debugGuiTextBlock1.color = "white";
-  debugGui.addControl(debugGuiTextBlock1);
-  const debugGuiTextBlock2 = new TextBlock("debug2", "debug2");
-  debugGuiTextBlock2.fontSize = 24;
-  debugGuiTextBlock2.top = -270;
-  debugGuiTextBlock2.left = -500;
-  debugGuiTextBlock2.color = "white";
-  debugGui.addControl(debugGuiTextBlock2);
+  const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
+
+  const debugPanel = new StackPanel();
+  debugPanel.widthInPixels = 200;
+  debugPanel.isVertical = true;
+  debugPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+  debugPanel.paddingTop = "10px";
+  debugGui.addControl(debugPanel);
+
+  const debugToggleCameraPanel = new StackPanel();
+  debugToggleCameraPanel.widthInPixels = 200;
+  debugToggleCameraPanel.heightInPixels = 30;
+  debugToggleCameraPanel.isVertical = false;
+  debugToggleCameraPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  debugToggleCameraPanel.paddingLeftInPixels = 5;
+  debugPanel.addControl(debugToggleCameraPanel);
+  const debugToggleCameraCheckbox = new Checkbox("toggleCameraCheckbox");
+  debugToggleCameraCheckbox.color = "white";
+  debugToggleCameraCheckbox.fontSize = 20;
+  debugToggleCameraCheckbox.isChecked = false;
+  debugToggleCameraCheckbox.widthInPixels = 20;
+  debugToggleCameraCheckbox.heightInPixels = 20;
+  debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
+    ev.skipNextObservers = true;
+    if (v) {
+    } else {
+      camera = replaceWithFirstPersonCamera();
+    }
+  });
+  debugToggleCameraPanel.addControl(debugToggleCameraCheckbox);
+  const debugToggleCameraTextBlock = new TextBlock("toggleCameraTextBlock", "Toggle Cam");
+  debugToggleCameraTextBlock.heightInPixels = 30;
+  debugToggleCameraTextBlock.color = "white";
+  debugToggleCameraTextBlock.fontSize = 20;
+  debugToggleCameraTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugToggleCameraTextBlock.paddingLeftInPixels = 5;
+  debugToggleCameraPanel.addControl(debugToggleCameraTextBlock);
+
+  // const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
+  // debugGuiTextBlock1.height = "30px";
+  // debugGuiTextBlock1.color = "white";
+  // debugGuiTextBlock1.fontSize = 20;
+  // debugGuiTextBlock1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  // debugPanel.addControl(debugGuiTextBlock1);
+
+  // const debugGuiTextBlock2 = new TextBlock("debug2", "debug2");
+  // debugGuiTextBlock2.height = "30px";
+  // debugGuiTextBlock2.color = "white";
+  // debugGuiTextBlock2.fontSize = 20;
+  // debugGuiTextBlock2.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  // debugPanel.addControl(debugGuiTextBlock2);
 
   scene.onBeforeRenderObservable.add((scene) => {
     if (scene.deltaTime == undefined) return;
@@ -170,14 +219,20 @@ HavokPhysics().then((hp) => {
       Quaternion.Zero()
     );
 
-    const velocity = characterInputDirection
-      .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion))
-      .normalize()
-      .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
+    let velocity: Vector3;
+
+    if (camera instanceof UniversalCamera) {
+      velocity = characterInputDirection
+        .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion))
+        .normalize()
+        .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
+    } else {
+      throw Error("SLOP: Camera not supported");
+    }
+
     velocity.y = characterAgg.body.getLinearVelocity().y;
 
     if (characterWantJump && characterCanJump) {
-      characterCanJump = false;
       velocity.y = Math.max(velocity.y, characterJumpVelocity);
     }
 
@@ -207,6 +262,12 @@ HavokPhysics().then((hp) => {
           case " ":
             characterWantJump = true;
             break;
+          case "§":
+            if (Inspector.IsVisible) {
+              Inspector.Hide();
+            } else {
+              Inspector.Show(scene, { embedMode: true });
+            }
         }
         break;
       case KeyboardEventTypes.KEYUP:
@@ -230,9 +291,11 @@ HavokPhysics().then((hp) => {
     }
   });
 
-  canvas.addEventListener("click", () => {
-    if (!engine.isPointerLock) {
-      engine.enterPointerlock();
+  scene.onPointerObservable.add((p) => {
+    if (p.event.button === 0) {
+      if (!engine.isPointerLock) {
+        engine.enterPointerlock();
+      }
     }
   });
 
