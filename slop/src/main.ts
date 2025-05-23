@@ -39,7 +39,7 @@ HavokPhysics().then((hp) => {
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
 
   const ground = MeshBuilder.CreateGround("ground", { width: 32, height: 32 }, scene);
-  new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.1 }, scene);
+  new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
   const groundMat = new GridMaterial("groundMat", scene);
   groundMat.lineColor = Color3.Teal();
   groundMat.gridRatio = 1;
@@ -71,22 +71,33 @@ HavokPhysics().then((hp) => {
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
-  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0.1 }, scene);
+  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
   const blockMat = new GridMaterial("blockMat", scene);
   blockMat.lineColor = Color3.Yellow();
   blockMat.gridRatio = 0.5;
   block.material = blockMat;
 
-  const platform = MeshBuilder.CreateBox("platform", { width: 2, height: 0.5, depth: 2 }, scene);
-  platform.position = new Vector3(4.5, 0.25, 4.5);
-  const platformAgg = new PhysicsAggregate(platform, PhysicsShapeType.BOX, { mass: 0, restitution: 0 }, scene);
-  platformAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
-  platformAgg.body.disablePreStep = false;
-  const platformMat = new GridMaterial("platformMat", scene);
-  platformMat.lineColor = Color3.Green();
-  platformMat.gridRatio = 0.5;
-  platform.material = platformMat;
-  let platformGoingUp = true;
+  const platform1 = MeshBuilder.CreateBox("platform1", { width: 2, height: 0.5, depth: 2 }, scene);
+  platform1.position = new Vector3(4.5, 0.25, 4.5);
+  const platform1Agg = new PhysicsAggregate(platform1, PhysicsShapeType.BOX, { mass: 0, restitution: 0 }, scene);
+  platform1Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
+  platform1Agg.body.disablePreStep = false;
+  const platform1Mat = new GridMaterial("platform1Mat", scene);
+  platform1Mat.lineColor = Color3.Green();
+  platform1Mat.gridRatio = 0.5;
+  platform1.material = platform1Mat;
+  let platform1GoingUp = true;
+
+  const platform2 = MeshBuilder.CreateBox("platform2", { width: 2, height: 0.5, depth: 2 }, scene);
+  platform2.position = new Vector3(8.5, 0.25, 4.5);
+  const platform2Agg = new PhysicsAggregate(platform2, PhysicsShapeType.BOX, { mass: 0, restitution: 0 }, scene);
+  platform2Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
+  platform2Agg.body.disablePreStep = false;
+  const platform2Mat = new GridMaterial("platform2Mat", scene);
+  platform2Mat.lineColor = Color3.Purple();
+  platform2Mat.gridRatio = 0.5;
+  platform2.material = platform2Mat;
+  let platform2GoingUp = true;
 
   function inCollision(ev: IBasePhysicsCollisionEvent, collider: PhysicsBody) {
     return ev.collider === collider || ev.collidedAgainst === collider;
@@ -105,7 +116,7 @@ HavokPhysics().then((hp) => {
   });
 
   const physicsViewer = new PhysicsViewer();
-  physicsViewer.showBody(platformAgg.body);
+  // physicsViewer.showBody(platform1Agg.body);
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
   const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
@@ -139,13 +150,23 @@ HavokPhysics().then((hp) => {
     const deltaTimeS = scene.deltaTime / 1000.0;
     if (deltaTimeS == 0) return;
 
-    if (platformGoingUp) {
-      if (platformAgg.transformNode.position.y >= 6.75) platformGoingUp = false;
+    if (platform1GoingUp) {
+      if (platform1Agg.transformNode.position.y >= 6.75) platform1GoingUp = false;
     } else {
-      if (platformAgg.transformNode.position.y <= 0.25) platformGoingUp = true;
+      if (platform1Agg.transformNode.position.y <= 0.25) platform1GoingUp = true;
     }
-    platformAgg.body.setTargetTransform(
-      new Vector3(platform.position.x, platform.position.y + (platformGoingUp ? 1 : -1) * 0.01, platform.position.z),
+    platform1Agg.body.setTargetTransform(
+      new Vector3(platform1.position.x, platform1.position.y + (platform1GoingUp ? 1 : -1) * 0.01, platform1.position.z),
+      Quaternion.Zero()
+    );
+
+    if (platform2GoingUp) {
+      if (platform2Agg.transformNode.position.y >= 6.75) platform2GoingUp = false;
+    } else {
+      if (platform2Agg.transformNode.position.y <= 0.25) platform2GoingUp = true;
+    }
+    platform2Agg.body.setTargetTransform(
+      new Vector3(platform2.position.x, platform2.position.y + (platform2GoingUp ? 6 * platform2.position.y : -1) * 0.01, platform2.position.z),
       Quaternion.Zero()
     );
 
@@ -157,7 +178,7 @@ HavokPhysics().then((hp) => {
 
     if (characterWantJump && characterCanJump) {
       characterCanJump = false;
-      velocity.y += characterJumpVelocity;
+      velocity.y = Math.max(velocity.y, characterJumpVelocity);
     }
 
     characterAgg.body.setLinearVelocity(velocity);
