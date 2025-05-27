@@ -13,7 +13,6 @@ import {
   PhysicsEventType,
   PhysicsMotionType,
   PhysicsShapeType,
-  PhysicsViewer,
   Quaternion,
   Scene,
   StandardMaterial,
@@ -30,6 +29,7 @@ HavokPhysics().then((hp) => {
   const engine = new Engine(canvas, true);
   const hk = new HavokPlugin(false, hp);
   const scene = new Scene(engine);
+  // const physicsViewer = new PhysicsViewer();
 
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
@@ -37,6 +37,7 @@ HavokPhysics().then((hp) => {
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
 
   const quaternionZeroReadonly = Quaternion.Zero();
+  const leftHandedForwardX4ReadOnly = Vector3.Forward(false).scaleInPlace(4);
 
   const ground = MeshBuilder.CreateGround("ground", { width: 32, height: 32 }, scene);
   new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
@@ -49,6 +50,7 @@ HavokPhysics().then((hp) => {
 
   const character = MeshBuilder.CreateCapsule("character", { height: 2, radius: 0.5 }, scene);
   character.position = new Vector3(0, 3, 0);
+  character.visibility = 0.5;
   const characterInputDirection = Vector3.Zero();
   const characterInputVelocity = Vector3.Zero();
   const characterOrientationQuaternion = Quaternion.Zero();
@@ -73,6 +75,7 @@ HavokPhysics().then((hp) => {
   characterFeetAgg.shape.isTrigger = true;
 
   let camera: Camera;
+  const cameraRotationQuaternion = Quaternion.Zero();
   function replaceWithFirstPersonCamera() {
     if (camera?.isDisposed() === false) {
       camera.dispose();
@@ -96,13 +99,25 @@ HavokPhysics().then((hp) => {
   characterFeet.isVisible = false;
   replaceWithFirstPersonCamera();
 
-  const xyzIndicator = MeshBuilder.CreateSphere("xyzIndicator", { diameter: 0.1 }, scene);
-  xyzIndicator.position = new Vector3(0, 2, 0);
+  const xyzIndicator = MeshBuilder.CreateSphere("xyzIndicator", { diameter: 0.2, segments: 1 }, scene);
+  const xyzIndicatorPositionPrev = xyzIndicator.position.clone();
   const xyzIndicatorMat = new StandardMaterial("xyzIndicatorMat", scene);
   xyzIndicatorMat.diffuseColor = Color3.Blue();
   xyzIndicatorMat.emissiveColor = Color3.Blue();
   xyzIndicator.material = xyzIndicatorMat;
-  xyzIndicator.setEnabled(false);
+  xyzIndicator.setEnabled(true);
+
+  const xyzIndicatorInfo = MeshBuilder.CreatePlane("xyzIndicatorInfo", { width: 3, height: 1.5 }, scene);
+  xyzIndicatorInfo.renderingGroupId = 1;
+  xyzIndicatorInfo.parent = xyzIndicator;
+  xyzIndicatorInfo.rotationQuaternion = cameraRotationQuaternion;
+  const xyzIndicatorInfoTxt = AdvancedDynamicTexture.CreateForMesh(xyzIndicatorInfo, 3 * 256, 1.5 * 256);
+  const xyzIndicatorInfoTxtTextBlock = new TextBlock("xyz", "xyz");
+  xyzIndicatorInfoTxtTextBlock.fontSizeInPixels = 64;
+  xyzIndicatorInfoTxtTextBlock.color = "blue";
+  xyzIndicatorInfoTxtTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  xyzIndicatorInfoTxtTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+  xyzIndicatorInfoTxt.addControl(xyzIndicatorInfoTxtTextBlock);
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
@@ -154,9 +169,6 @@ HavokPhysics().then((hp) => {
       }
     }
   });
-
-  const physicsViewer = new PhysicsViewer();
-  // physicsViewer.showBody(platform1Agg.body);
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
@@ -212,7 +224,7 @@ HavokPhysics().then((hp) => {
   const debugToggleXYZIndicatorCheckbox = new Checkbox("toggleXYZIndicatorCheckbox");
   debugToggleXYZIndicatorCheckbox.color = "white";
   debugToggleXYZIndicatorCheckbox.fontSize = 20;
-  debugToggleXYZIndicatorCheckbox.isChecked = false;
+  debugToggleXYZIndicatorCheckbox.isChecked = xyzIndicator.isEnabled();
   debugToggleXYZIndicatorCheckbox.widthInPixels = 20;
   debugToggleXYZIndicatorCheckbox.heightInPixels = 20;
   debugToggleXYZIndicatorCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
@@ -242,6 +254,22 @@ HavokPhysics().then((hp) => {
   debugGuiFpsTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.addControl(debugGuiFpsTextBlock);
 
+  function createThrottler(ms: number) {
+    let endAtMs: number | undefined;
+    return function (): boolean {
+      if (!endAtMs) {
+        endAtMs = Date.now() + ms;
+      }
+      if (Date.now() > endAtMs) {
+        endAtMs = undefined;
+        return true;
+      }
+      return false;
+    };
+  }
+
+  const onBeforeRenderObservableEveryQrtrSecond = createThrottler(250);
+  const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
   scene.onBeforeRenderObservable.add((scene) => {
     if (scene.deltaTime == undefined) return;
     const deltaTimeS = scene.deltaTime / 1000.0;
@@ -254,12 +282,38 @@ HavokPhysics().then((hp) => {
     characterFeet.position.y = character.position.y - 0.996;
     characterFeet.position.z = character.position.z;
 
+    let cameraPitch: number;
+    let cameraYaw: number;
     if (camera instanceof UniversalCamera) {
-      Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion);
+      cameraPitch = camera.rotation.x;
+      cameraYaw = camera.rotation.y;
     } else if (camera instanceof ArcRotateCamera) {
-      Quaternion.FromEulerAnglesToRef(0, -camera.alpha - Math.PI / 2, 0, characterOrientationQuaternion);
+      cameraPitch = -camera.beta + Math.PI / 2;
+      cameraYaw = -camera.alpha - Math.PI / 2;
     } else {
       throw Error("SLOP: Camera not supported");
+    }
+
+    Quaternion.FromEulerAnglesToRef(cameraPitch, cameraYaw, 0, cameraRotationQuaternion);
+    Quaternion.FromEulerAnglesToRef(0, cameraYaw, 0, characterOrientationQuaternion);
+
+    if (onBeforeRenderObservableEveryQrtrSecond()) {
+      if (xyzIndicator.isEnabled()) {
+        xyzIndicator.position.copyFrom(character.position);
+        xyzIndicator.position.addInPlace(leftHandedForwardX4ReadOnly);
+        xyzIndicator.position.rotateByQuaternionAroundPointToRef(cameraRotationQuaternion, character.position, xyzIndicator.position);
+        xyzIndicator.position.x = Math.round(xyzIndicator.position.x);
+        xyzIndicator.position.y = Math.round(xyzIndicator.position.y);
+        xyzIndicator.position.z = Math.round(xyzIndicator.position.z);
+        if (!xyzIndicatorPositionPrev.equals(xyzIndicator.position)) {
+          xyzIndicatorPositionPrev.copyFrom(xyzIndicator.position);
+          xyzIndicatorInfoTxtTextBlock.text = `X:${xyzIndicator.position.x}, Y:${xyzIndicator.position.y}, Z:${xyzIndicator.position.z}`;
+        }
+      }
+    }
+
+    if (onBeforeRenderObservableEveryHalfSecond()) {
+      debugGuiFpsTextBlock.text = `FPS: ${Math.round(engine.getFps())}`;
     }
   });
 
@@ -288,9 +342,6 @@ HavokPhysics().then((hp) => {
       quaternionZeroReadonly
     );
 
-    if (xyzIndicator.isEnabled()) {
-    }
-
     characterInputDirection
       .applyRotationQuaternionToRef(characterOrientationQuaternion, characterInputVelocity)
       .normalize()
@@ -304,11 +355,6 @@ HavokPhysics().then((hp) => {
 
     characterAgg.body.setLinearVelocity(characterInputVelocity);
   });
-
-  setInterval(() => {
-    debugGuiFpsTextBlock.text = `FPS: ${Math.round(engine.getFps())}`;
-    debugGui.update();
-  }, 1000);
 
   scene.onKeyboardObservable.add((k) => {
     switch (k.type) {
