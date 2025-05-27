@@ -45,6 +45,8 @@ HavokPhysics().then((hp) => {
   groundMat.gridRatio = 1;
   ground.material = groundMat;
 
+  const wasdKeysDown = { w: false, a: false, s: false, d: false };
+
   const character = MeshBuilder.CreateCapsule("character", { height: 2, radius: 0.5 }, scene);
   character.position = new Vector3(0, 3, 0);
   const characterInputDirection = Vector3.Zero();
@@ -315,18 +317,22 @@ HavokPhysics().then((hp) => {
           case "w":
           case "W":
             characterInputDirection.z = 1;
+            wasdKeysDown.w = true;
             break;
           case "s":
           case "S":
             characterInputDirection.z = -1;
+            wasdKeysDown.s = true;
             break;
           case "a":
           case "A":
             characterInputDirection.x = -1;
+            wasdKeysDown.a = true;
             break;
           case "d":
           case "D":
             characterInputDirection.x = 1;
+            wasdKeysDown.d = true;
             break;
           case " ":
             characterWantJump = true;
@@ -343,15 +349,23 @@ HavokPhysics().then((hp) => {
         switch (k.event.key) {
           case "w":
           case "W":
+            wasdKeysDown.w = false;
+            characterInputDirection.z = wasdKeysDown.s ? -1 : 0;
+            break;
           case "s":
           case "S":
-            characterInputDirection.z = 0;
+            wasdKeysDown.s = false;
+            characterInputDirection.z = wasdKeysDown.w ? 1 : 0;
             break;
           case "a":
           case "A":
+            wasdKeysDown.a = false;
+            characterInputDirection.x = wasdKeysDown.d ? 1 : 0;
+            break;
           case "d":
           case "D":
-            characterInputDirection.x = 0;
+            wasdKeysDown.d = false;
+            characterInputDirection.x = wasdKeysDown.a ? -1 : 0;
             break;
           case " ":
             characterWantJump = false;
