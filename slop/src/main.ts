@@ -36,6 +36,8 @@ HavokPhysics().then((hp) => {
 
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
 
+  const quaternionZeroReadonly = Quaternion.Zero();
+
   const ground = MeshBuilder.CreateGround("ground", { width: 32, height: 32 }, scene);
   new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
   const groundMat = new GridMaterial("groundMat", scene);
@@ -46,6 +48,7 @@ HavokPhysics().then((hp) => {
   const character = MeshBuilder.CreateCapsule("character", { height: 2, radius: 0.5 }, scene);
   character.position = new Vector3(0, 3, 0);
   const characterInputDirection = Vector3.Zero();
+  const characterInputVelocity = Vector3.Zero();
   const characterOrientationQuaternion = Quaternion.Zero();
   const characterAirSpeed = 3.0;
   const characterGroundSpeed = 4.0;
@@ -87,7 +90,17 @@ HavokPhysics().then((hp) => {
     c.minZ = 0;
     camera = c;
   }
+  character.isVisible = false;
+  characterFeet.isVisible = false;
   replaceWithFirstPersonCamera();
+
+  const xyzIndicator = MeshBuilder.CreateSphere("xyzIndicator", { diameter: 0.1 }, scene);
+  xyzIndicator.position = new Vector3(0, 2, 0);
+  const xyzIndicatorMat = new StandardMaterial("xyzIndicatorMat", scene);
+  xyzIndicatorMat.diffuseColor = Color3.Blue();
+  xyzIndicatorMat.emissiveColor = Color3.Blue();
+  xyzIndicator.material = xyzIndicatorMat;
+  xyzIndicator.setEnabled(false);
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
@@ -107,6 +120,7 @@ HavokPhysics().then((hp) => {
   platform1Mat.gridRatio = 0.5;
   platform1.material = platform1Mat;
   let platform1GoingUp = true;
+  const platform1Transform = Vector3.Zero();
 
   const platform2 = MeshBuilder.CreateBox("platform2", { width: 2, height: 0.5, depth: 2 }, scene);
   platform2.position = new Vector3(8.5, 0.25, 4.5);
@@ -118,6 +132,10 @@ HavokPhysics().then((hp) => {
   platform2Mat.gridRatio = 0.5;
   platform2.material = platform2Mat;
   let platform2GoingUp = true;
+  const platform2Transform = Vector3.Zero();
+
+  // const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 3, height: 0.5, tessellation: 8 })
+  // platform1.position = new Vector3()
 
   function inCollision(ev: IBasePhysicsCollisionEvent, collider: PhysicsBody) {
     return ev.collider === collider || ev.collidedAgainst === collider;
@@ -164,19 +182,49 @@ HavokPhysics().then((hp) => {
   debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
     ev.skipNextObservers = true;
     if (v) {
+      character.isVisible = true;
+      characterFeet.isVisible = true;
       replaceWithArcRotateCamera();
     } else {
+      character.isVisible = false;
+      characterFeet.isVisible = false;
       replaceWithFirstPersonCamera();
     }
   });
   debugToggleCameraPanel.addControl(debugToggleCameraCheckbox);
-  const debugToggleCameraTextBlock = new TextBlock("toggleCameraTextBlock", "Toggle Cam");
+  const debugToggleCameraTextBlock = new TextBlock("toggleCameraTextBlock", "ArcRotateCam");
   debugToggleCameraTextBlock.heightInPixels = 30;
   debugToggleCameraTextBlock.color = "white";
   debugToggleCameraTextBlock.fontSize = 20;
   debugToggleCameraTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugToggleCameraTextBlock.paddingLeftInPixels = 5;
   debugToggleCameraPanel.addControl(debugToggleCameraTextBlock);
+
+  const debugToggleXYZIndicatorPanel = new StackPanel();
+  debugToggleXYZIndicatorPanel.widthInPixels = 200;
+  debugToggleXYZIndicatorPanel.heightInPixels = 30;
+  debugToggleXYZIndicatorPanel.isVertical = false;
+  debugToggleXYZIndicatorPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  debugToggleXYZIndicatorPanel.paddingLeftInPixels = 5;
+  debugPanel.addControl(debugToggleXYZIndicatorPanel);
+  const debugToggleXYZIndicatorCheckbox = new Checkbox("toggleXYZIndicatorCheckbox");
+  debugToggleXYZIndicatorCheckbox.color = "white";
+  debugToggleXYZIndicatorCheckbox.fontSize = 20;
+  debugToggleXYZIndicatorCheckbox.isChecked = false;
+  debugToggleXYZIndicatorCheckbox.widthInPixels = 20;
+  debugToggleXYZIndicatorCheckbox.heightInPixels = 20;
+  debugToggleXYZIndicatorCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
+    ev.skipNextObservers = true;
+    xyzIndicator.setEnabled(v);
+  });
+  debugToggleXYZIndicatorPanel.addControl(debugToggleXYZIndicatorCheckbox);
+  const debugToggleXYZIndicatorTextBlock = new TextBlock("toggleXYZIndixatorTextBlock", "XyzIndicator");
+  debugToggleXYZIndicatorTextBlock.heightInPixels = 30;
+  debugToggleXYZIndicatorTextBlock.color = "white";
+  debugToggleXYZIndicatorTextBlock.fontSize = 20;
+  debugToggleXYZIndicatorTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugToggleXYZIndicatorTextBlock.paddingLeftInPixels = 5;
+  debugToggleXYZIndicatorPanel.addControl(debugToggleXYZIndicatorTextBlock);
 
   const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
   debugGuiTextBlock1.height = "30px";
@@ -185,12 +233,12 @@ HavokPhysics().then((hp) => {
   debugGuiTextBlock1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.addControl(debugGuiTextBlock1);
 
-  // const debugGuiTextBlock2 = new TextBlock("debug2", "debug2");
-  // debugGuiTextBlock2.height = "30px";
-  // debugGuiTextBlock2.color = "white";
-  // debugGuiTextBlock2.fontSize = 20;
-  // debugGuiTextBlock2.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-  // debugPanel.addControl(debugGuiTextBlock2);
+  const debugGuiFpsTextBlock = new TextBlock("fps", "fps");
+  debugGuiFpsTextBlock.height = "30px";
+  debugGuiFpsTextBlock.color = "white";
+  debugGuiFpsTextBlock.fontSize = 20;
+  debugGuiFpsTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugPanel.addControl(debugGuiFpsTextBlock);
 
   scene.onBeforeRenderObservable.add((scene) => {
     if (scene.deltaTime == undefined) return;
@@ -203,6 +251,14 @@ HavokPhysics().then((hp) => {
     characterFeet.position.x = character.position.x;
     characterFeet.position.y = character.position.y - 0.996;
     characterFeet.position.z = character.position.z;
+
+    if (camera instanceof UniversalCamera) {
+      Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion);
+    } else if (camera instanceof ArcRotateCamera) {
+      Quaternion.FromEulerAnglesToRef(0, -camera.alpha - Math.PI / 2, 0, characterOrientationQuaternion);
+    } else {
+      throw Error("SLOP: Camera not supported");
+    }
   });
 
   scene.onAfterPhysicsObservable.add((scene) => {
@@ -216,8 +272,8 @@ HavokPhysics().then((hp) => {
       if (platform1Agg.transformNode.position.y <= 0.25) platform1GoingUp = true;
     }
     platform1Agg.body.setTargetTransform(
-      new Vector3(platform1.position.x, platform1.position.y + (platform1GoingUp ? 1 : -1) * 0.01, platform1.position.z),
-      Quaternion.Zero()
+      platform1Transform.set(platform1.position.x, platform1.position.y + (platform1GoingUp ? 1 : -1) * 0.01, platform1.position.z),
+      quaternionZeroReadonly
     );
 
     if (platform2GoingUp) {
@@ -226,35 +282,31 @@ HavokPhysics().then((hp) => {
       if (platform2Agg.transformNode.position.y <= 0.25) platform2GoingUp = true;
     }
     platform2Agg.body.setTargetTransform(
-      new Vector3(platform2.position.x, platform2.position.y + (platform2GoingUp ? 6 * platform2.position.y : -1) * 0.01, platform2.position.z),
-      Quaternion.Zero()
+      platform2Transform.set(platform2.position.x, platform2.position.y + (platform2GoingUp ? 6 * platform2.position.y : -1) * 0.01, platform2.position.z),
+      quaternionZeroReadonly
     );
 
-    let velocity: Vector3;
-
-    if (camera instanceof UniversalCamera) {
-      velocity = characterInputDirection
-        .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, camera.rotation.y, 0, characterOrientationQuaternion))
-        .normalize()
-        .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
-    } else if (camera instanceof ArcRotateCamera) {
-      debugGuiTextBlock1.text = `${camera.alpha}`;
-      velocity = characterInputDirection
-        .applyRotationQuaternion(Quaternion.FromEulerAnglesToRef(0, -camera.alpha - Math.PI / 2, 0, characterOrientationQuaternion))
-        .normalize()
-        .scale(characterCanJump ? characterGroundSpeed : characterAirSpeed);
-    } else {
-      throw Error("SLOP: Camera not supported");
+    if (xyzIndicator.isEnabled()) {
     }
 
-    velocity.y = characterAgg.body.getLinearVelocity().y;
+    characterInputDirection
+      .applyRotationQuaternionToRef(characterOrientationQuaternion, characterInputVelocity)
+      .normalize()
+      .scaleInPlace(characterCanJump ? characterGroundSpeed : characterAirSpeed);
+
+    characterInputVelocity.y = characterAgg.body.getLinearVelocity().y;
 
     if (characterWantJump && characterCanJump) {
-      velocity.y = Math.max(velocity.y, characterJumpVelocity);
+      characterInputVelocity.y = Math.max(characterInputVelocity.y, characterJumpVelocity);
     }
 
-    characterAgg.body.setLinearVelocity(velocity);
+    characterAgg.body.setLinearVelocity(characterInputVelocity);
   });
+
+  setInterval(() => {
+    debugGuiFpsTextBlock.text = `FPS: ${Math.round(engine.getFps())}`;
+    debugGui.update();
+  }, 1000);
 
   scene.onKeyboardObservable.add((k) => {
     switch (k.type) {
