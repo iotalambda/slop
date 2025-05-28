@@ -1,5 +1,6 @@
 import {
   ArcRotateCamera,
+  Axis,
   Camera,
   Color3,
   Engine,
@@ -12,7 +13,9 @@ import {
   PhysicsBody,
   PhysicsEventType,
   PhysicsMotionType,
+  PhysicsPrestepType,
   PhysicsShapeType,
+  PhysicsViewer,
   Quaternion,
   Scene,
   StandardMaterial,
@@ -29,18 +32,18 @@ HavokPhysics().then((hp) => {
   const engine = new Engine(canvas, true);
   const hk = new HavokPlugin(false, hp);
   const scene = new Scene(engine);
-  // const physicsViewer = new PhysicsViewer();
 
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
 
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
+  const physicsViewer = new PhysicsViewer(scene);
 
   const quaternionZeroReadonly = Quaternion.Zero();
   const leftHandedForwardX4ReadOnly = Vector3.Forward(false).scaleInPlace(4);
 
   const ground = MeshBuilder.CreateGround("ground", { width: 32, height: 32 }, scene);
-  new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
+  new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 0.5, restitution: 0 }, scene);
   const groundMat = new GridMaterial("groundMat", scene);
   groundMat.lineColor = Color3.Teal();
   groundMat.gridRatio = 1;
@@ -51,20 +54,22 @@ HavokPhysics().then((hp) => {
   const character = MeshBuilder.CreateCapsule("character", { height: 2, radius: 0.5 }, scene);
   character.position = new Vector3(0, 3, 0);
   character.visibility = 0.5;
-  const characterInputDirection = Vector3.Zero();
-  const characterInputVelocity = Vector3.Zero();
+  const characterWasdDirection = Vector3.Zero();
+  const characterWasdVelocity = Vector3.Zero();
+  const characterLinearVelocity = Vector3.Zero();
   const characterOrientationQuaternion = Quaternion.Zero();
-  const characterAirSpeed = 3.0;
-  const characterGroundSpeed = 4.0;
-  const characterJumpVelocity = 8.0;
+  const characterJumpImpulse = Vector3.Zero();
+  const characterJumpImpulseSize = 7.5;
+  const characterWasdMaxSpeed = 4.0;
   let characterWantJump = false;
   let characterCanJump = false;
-  const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CAPSULE, { mass: 3, friction: 0, restitution: 0 }, scene);
+  const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CAPSULE, { mass: 1, friction: 1, restitution: 0 }, scene);
   characterAgg.body.setMassProperties({
-    inertia: Vector3.ZeroReadOnly,
+    ...characterAgg.body.getMassProperties(),
+    inertia: new Vector3(99, 99, 99),
   });
 
-  const characterFeet = MeshBuilder.CreateSphere("characterFeet", { diameter: 0.05 }, scene);
+  const characterFeet = MeshBuilder.CreateSphere("characterFeet", { diameter: 0.2, segments: 1 }, scene);
   characterFeet.position = new Vector3(0, -1.5);
   const characterFeetMat = new StandardMaterial("characterFeetMat", scene);
   characterFeetMat.diffuseColor = Color3.Red();
@@ -97,6 +102,7 @@ HavokPhysics().then((hp) => {
   }
   character.isVisible = false;
   characterFeet.isVisible = false;
+  characterOrientationQuaternion.copyFrom(Quaternion.RotationAxis(Axis.Y, Math.PI / 1.5));
   replaceWithFirstPersonCamera();
 
   const xyzIndicator = MeshBuilder.CreateSphere("xyzIndicator", { diameter: 0.2, segments: 1 }, scene);
@@ -105,7 +111,7 @@ HavokPhysics().then((hp) => {
   xyzIndicatorMat.diffuseColor = Color3.Blue();
   xyzIndicatorMat.emissiveColor = Color3.Blue();
   xyzIndicator.material = xyzIndicatorMat;
-  xyzIndicator.setEnabled(true);
+  xyzIndicator.setEnabled(false);
 
   const xyzIndicatorInfo = MeshBuilder.CreatePlane("xyzIndicatorInfo", { width: 3, height: 1.5 }, scene);
   xyzIndicatorInfo.renderingGroupId = 1;
@@ -121,7 +127,7 @@ HavokPhysics().then((hp) => {
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
-  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.1, restitution: 0 }, scene);
+  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 1, restitution: 0 }, scene);
   const blockMat = new GridMaterial("blockMat", scene);
   blockMat.lineColor = Color3.Yellow();
   blockMat.gridRatio = 0.5;
@@ -151,8 +157,24 @@ HavokPhysics().then((hp) => {
   let platform2GoingUp = true;
   const platform2Transform = Vector3.Zero();
 
-  // const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 3, height: 0.5, tessellation: 8 })
-  // platform1.position = new Vector3()
+  const box1 = MeshBuilder.CreateBox("box1", { width: 2, height: 0.5, depth: 2 }, scene);
+  box1.position = new Vector3(-4, 10, -7);
+  const box1Agg = new PhysicsAggregate(box1, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+
+  const box2 = MeshBuilder.CreateBox("box2", { width: 2, height: 0.5, depth: 2 }, scene);
+  box2.position = new Vector3(-4, 15, -7);
+  const box2Agg = new PhysicsAggregate(box2, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+
+  const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 5, height: 0.5, tessellation: 8 }, scene);
+  platform3.position = new Vector3(10, 0.25, -7);
+  const platform3Agg = new PhysicsAggregate(platform3, PhysicsShapeType.CYLINDER, { mass: 0, friction: 10 }, scene);
+  platform3Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
+  platform3Agg.body.setPrestepType(PhysicsPrestepType.ACTION);
+  const platform3Mat = new GridMaterial("platform3Mat", scene);
+  platform3Mat.lineColor = Color3.Red();
+  platform3Mat.gridRatio = 0.5;
+  platform3.material = platform3Mat;
+  // physicsViewer.showBody(platform3Agg.body);
 
   function inCollision(ev: IBasePhysicsCollisionEvent, collider: PhysicsBody) {
     return ev.collider === collider || ev.collidedAgainst === collider;
@@ -317,11 +339,8 @@ HavokPhysics().then((hp) => {
     }
   });
 
+  const onAfterPhysicsObservableEvery50Ms = createThrottler(50);
   scene.onAfterPhysicsObservable.add((scene) => {
-    if (scene.deltaTime == undefined) return;
-    const deltaTimeS = scene.deltaTime / 1000.0;
-    if (deltaTimeS == 0) return;
-
     if (platform1GoingUp) {
       if (platform1Agg.transformNode.position.y >= 6.75) platform1GoingUp = false;
     } else {
@@ -342,18 +361,21 @@ HavokPhysics().then((hp) => {
       quaternionZeroReadonly
     );
 
-    characterInputDirection
-      .applyRotationQuaternionToRef(characterOrientationQuaternion, characterInputVelocity)
-      .normalize()
-      .scaleInPlace(characterCanJump ? characterGroundSpeed : characterAirSpeed);
+    platform3.addRotation(0, 0.05, 0);
 
-    characterInputVelocity.y = characterAgg.body.getLinearVelocity().y;
-
+    characterWasdDirection.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdVelocity).normalize(); // characterWasdVelocity has still an intermediate value, not the final one
     if (characterWantJump && characterCanJump) {
-      characterInputVelocity.y = Math.max(characterInputVelocity.y, characterJumpVelocity);
+      characterJumpImpulse.copyFrom(Vector3.UpReadOnly).scaleInPlace(characterJumpImpulseSize);
+      characterAgg.body.applyImpulse(characterJumpImpulse, character.position);
+      characterCanJump = false;
     }
 
-    characterAgg.body.setLinearVelocity(characterInputVelocity);
+    if (onAfterPhysicsObservableEvery50Ms()) {
+      characterAgg.body.getLinearVelocityToRef(characterLinearVelocity);
+      if (Math.sqrt(Math.pow(characterLinearVelocity.x, 2) + Math.pow(characterLinearVelocity.z, 2)) < characterWasdMaxSpeed) {
+        characterAgg.body.applyImpulse(characterWasdVelocity, character.position);
+      }
+    }
   });
 
   scene.onKeyboardObservable.add((k) => {
@@ -362,22 +384,22 @@ HavokPhysics().then((hp) => {
         switch (k.event.key) {
           case "w":
           case "W":
-            characterInputDirection.z = 1;
+            characterWasdDirection.z = 1;
             wasdKeysDown.w = true;
             break;
           case "s":
           case "S":
-            characterInputDirection.z = -1;
+            characterWasdDirection.z = -1;
             wasdKeysDown.s = true;
             break;
           case "a":
           case "A":
-            characterInputDirection.x = -1;
+            characterWasdDirection.x = -1;
             wasdKeysDown.a = true;
             break;
           case "d":
           case "D":
-            characterInputDirection.x = 1;
+            characterWasdDirection.x = 1;
             wasdKeysDown.d = true;
             break;
           case " ":
@@ -396,22 +418,22 @@ HavokPhysics().then((hp) => {
           case "w":
           case "W":
             wasdKeysDown.w = false;
-            characterInputDirection.z = wasdKeysDown.s ? -1 : 0;
+            characterWasdDirection.z = wasdKeysDown.s ? -1 : 0;
             break;
           case "s":
           case "S":
             wasdKeysDown.s = false;
-            characterInputDirection.z = wasdKeysDown.w ? 1 : 0;
+            characterWasdDirection.z = wasdKeysDown.w ? 1 : 0;
             break;
           case "a":
           case "A":
             wasdKeysDown.a = false;
-            characterInputDirection.x = wasdKeysDown.d ? 1 : 0;
+            characterWasdDirection.x = wasdKeysDown.d ? 1 : 0;
             break;
           case "d":
           case "D":
             wasdKeysDown.d = false;
-            characterInputDirection.x = wasdKeysDown.a ? -1 : 0;
+            characterWasdDirection.x = wasdKeysDown.a ? -1 : 0;
             break;
           case " ":
             characterWantJump = false;
@@ -426,6 +448,10 @@ HavokPhysics().then((hp) => {
         engine.enterPointerlock();
       }
     }
+  });
+
+  window.addEventListener("resize", () => {
+    engine.resize();
   });
 
   engine.runRenderLoop(() => {
