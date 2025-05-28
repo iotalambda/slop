@@ -51,22 +51,23 @@ HavokPhysics().then((hp) => {
 
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
 
-  const character = MeshBuilder.CreateCapsule("character", { height: 2, radius: 0.5 }, scene);
+  const character = MeshBuilder.CreateCylinder("character", { height: 2 }, scene);
   character.position = new Vector3(0, 3, 0);
   character.visibility = 0.5;
   const characterWasdDirection = Vector3.Zero();
   const characterWasdVelocity = Vector3.Zero();
   const characterLinearVelocity = Vector3.Zero();
   const characterOrientationQuaternion = Quaternion.Zero();
+  const characterRotation = character.rotation;
   const characterJumpImpulse = Vector3.Zero();
   const characterJumpImpulseSize = 7.5;
   const characterWasdMaxSpeed = 4.0;
   let characterWantJump = false;
   let characterCanJump = false;
-  const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CAPSULE, { mass: 1, friction: 1, restitution: 0 }, scene);
+  const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CYLINDER, { mass: 1, friction: 1, restitution: 0 }, scene);
   characterAgg.body.setMassProperties({
     ...characterAgg.body.getMassProperties(),
-    inertia: new Vector3(99, 99, 99),
+    inertia: new Vector3(999999, 0.01, 999999),
   });
 
   const characterFeet = MeshBuilder.CreateSphere("characterFeet", { diameter: 0.2, segments: 1 }, scene);
@@ -157,13 +158,19 @@ HavokPhysics().then((hp) => {
   let platform2GoingUp = true;
   const platform2Transform = Vector3.Zero();
 
-  const box1 = MeshBuilder.CreateBox("box1", { width: 2, height: 0.5, depth: 2 }, scene);
-  box1.position = new Vector3(-4, 10, -7);
+  const box1 = MeshBuilder.CreateBox("box1", { width: 0.5, height: 4.5, depth: 0.5 }, scene);
+  box1.position = new Vector3(-4, 3, -7);
   const box1Agg = new PhysicsAggregate(box1, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+  const box1Mat = new StandardMaterial("box1Mat", scene);
+  box1Mat.diffuseColor = new Color3(1, 0.5, 0);
+  box1.material = box1Mat;
 
-  const box2 = MeshBuilder.CreateBox("box2", { width: 2, height: 0.5, depth: 2 }, scene);
-  box2.position = new Vector3(-4, 15, -7);
+  const box2 = MeshBuilder.CreateBox("box2", { width: 2, height: 2, depth: 2 }, scene);
+  box2.position = new Vector3(-4, 6, -7);
   const box2Agg = new PhysicsAggregate(box2, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+  const box2Mat = new StandardMaterial("box2Mat", scene);
+  box2Mat.diffuseColor = new Color3(0, 0.5, 0);
+  box2.material = box2Mat;
 
   const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 5, height: 0.5, tessellation: 8 }, scene);
   platform3.position = new Vector3(10, 0.25, -7);
@@ -298,7 +305,6 @@ HavokPhysics().then((hp) => {
     if (deltaTimeS == 0) return;
 
     camera.position.copyFrom(character.position);
-    characterAgg.body.setAngularVelocity(Vector3.ZeroReadOnly);
 
     characterFeet.position.x = character.position.x;
     characterFeet.position.y = character.position.y - 0.996;
@@ -307,6 +313,11 @@ HavokPhysics().then((hp) => {
     let cameraPitch: number;
     let cameraYaw: number;
     if (camera instanceof UniversalCamera) {
+      const prevY = characterRotation.y;
+      character.rotationQuaternion?.toEulerAnglesToRef(characterRotation);
+      if (characterRotation.y !== prevY) {
+        camera.rotation.y -= prevY - character.rotation.y;
+      }
       cameraPitch = camera.rotation.x;
       cameraYaw = camera.rotation.y;
     } else if (camera instanceof ArcRotateCamera) {
@@ -361,7 +372,7 @@ HavokPhysics().then((hp) => {
       quaternionZeroReadonly
     );
 
-    platform3.addRotation(0, 0.05, 0);
+    platform3.addRotation(0, 0.01, 0);
 
     characterWasdDirection.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdVelocity).normalize(); // characterWasdVelocity has still an intermediate value, not the final one
     if (characterWantJump && characterCanJump) {
