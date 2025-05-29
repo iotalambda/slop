@@ -29,15 +29,16 @@ import { GridMaterial } from "@babylonjs/materials";
 
 HavokPhysics().then((hp) => {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-  const engine = new Engine(canvas, true);
+  const hkTimeStep = 1 / 30;
+  const engine = new Engine(canvas, true, { deterministicLockstep: true, lockstepMaxSteps: 9999 });
   const hk = new HavokPlugin(false, hp);
   const scene = new Scene(engine);
+  scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
+  hk.setTimeStep(hkTimeStep);
+  const physicsViewer = new PhysicsViewer(scene);
 
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
-
-  scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
-  const physicsViewer = new PhysicsViewer(scene);
 
   const quaternionZeroReadonly = Quaternion.Zero();
   const leftHandedForwardX4ReadOnly = Vector3.Forward(false).scaleInPlace(4);
@@ -52,16 +53,18 @@ HavokPhysics().then((hp) => {
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
 
   const character = MeshBuilder.CreateCylinder("character", { height: 2 }, scene);
-  character.position = new Vector3(0, 3, 0);
+  character.position = new Vector3(9, 13, 5);
   character.visibility = 0.5;
   const characterWasdDirection = Vector3.Zero();
   const characterWasdVelocity = Vector3.Zero();
   const characterLinearVelocity = Vector3.Zero();
+  const characterLinearVelocityXZ = Vector3.Zero();
+  const characterLinearVelocityXZMinusWasdVelocity = Vector3.Zero();
   const characterOrientationQuaternion = Quaternion.Zero();
   const characterRotation = character.rotation;
   const characterJumpImpulse = Vector3.Zero();
-  const characterJumpImpulseSize = 7.5;
-  const characterWasdMaxSpeed = 4.0;
+  const characterJumpImpulseSize = 9.0;
+  const characterWasdMaxSpeed = 5.0;
   let characterWantJump = false;
   let characterCanJump = false;
   const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CYLINDER, { mass: 1, friction: 1, restitution: 0 }, scene);
@@ -69,6 +72,8 @@ HavokPhysics().then((hp) => {
     ...characterAgg.body.getMassProperties(),
     inertia: new Vector3(999999, 0.01, 999999),
   });
+  characterAgg.body.setLinearDamping(0.2);
+  characterAgg.body.setAngularDamping(0.5);
 
   const characterFeet = MeshBuilder.CreateSphere("characterFeet", { diameter: 0.2, segments: 1 }, scene);
   characterFeet.position = new Vector3(0, -1.5);
@@ -128,7 +133,7 @@ HavokPhysics().then((hp) => {
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
-  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 1, restitution: 0 }, scene);
+  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.5, restitution: 0 }, scene);
   const blockMat = new GridMaterial("blockMat", scene);
   blockMat.lineColor = Color3.Yellow();
   blockMat.gridRatio = 0.5;
@@ -138,13 +143,12 @@ HavokPhysics().then((hp) => {
   platform1.position = new Vector3(4.5, 0.25, 4.5);
   const platform1Agg = new PhysicsAggregate(platform1, PhysicsShapeType.BOX, { mass: 0, restitution: 0 }, scene);
   platform1Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
-  platform1Agg.body.disablePreStep = false;
+  platform1.physicsBody?.setLinearVelocity(Vector3.Up());
   const platform1Mat = new GridMaterial("platform1Mat", scene);
   platform1Mat.lineColor = Color3.Green();
   platform1Mat.gridRatio = 0.5;
   platform1.material = platform1Mat;
   let platform1GoingUp = true;
-  const platform1Transform = Vector3.Zero();
 
   const platform2 = MeshBuilder.CreateBox("platform2", { width: 2, height: 0.5, depth: 2 }, scene);
   platform2.position = new Vector3(8.5, 0.25, 4.5);
@@ -160,21 +164,30 @@ HavokPhysics().then((hp) => {
 
   const box1 = MeshBuilder.CreateBox("box1", { width: 0.5, height: 4.5, depth: 0.5 }, scene);
   box1.position = new Vector3(-4, 3, -7);
-  const box1Agg = new PhysicsAggregate(box1, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+  const box1Agg = new PhysicsAggregate(box1, PhysicsShapeType.BOX, { mass: 2, friction: 0.4, restitution: 0 }, scene);
   const box1Mat = new StandardMaterial("box1Mat", scene);
   box1Mat.diffuseColor = new Color3(1, 0.5, 0);
   box1.material = box1Mat;
 
   const box2 = MeshBuilder.CreateBox("box2", { width: 2, height: 2, depth: 2 }, scene);
-  box2.position = new Vector3(-4, 6, -7);
-  const box2Agg = new PhysicsAggregate(box2, PhysicsShapeType.BOX, { mass: 5, friction: 0.4, restitution: 0 }, scene);
+  box2.position = new Vector3(-4, 10, -7);
+  const box2Agg = new PhysicsAggregate(box2, PhysicsShapeType.BOX, { mass: 2, friction: 0.4, restitution: 0 }, scene);
   const box2Mat = new StandardMaterial("box2Mat", scene);
   box2Mat.diffuseColor = new Color3(0, 0.5, 0);
   box2.material = box2Mat;
 
+  // for (let i = 0; i < 500; i++) {
+  //   const boxN = MeshBuilder.CreateSphere(`box${i}`, { diameter: 3 }, scene);
+  //   boxN.position = new Vector3(-8 + 0.01 * (i % 2), 0.5 + i * 10, -8);
+  //   const boxNAgg = new PhysicsAggregate(boxN, PhysicsShapeType.SPHERE, { mass: 0.2, friction: 0.4, restitution: 0 }, scene);
+  //   const boxNMat = new StandardMaterial(`box${i}Mat`, scene);
+  //   boxNMat.diffuseColor = new Color3(0, 0.5, 0);
+  //   boxN.material = boxNMat;
+  // }
+
   const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 5, height: 0.5, tessellation: 8 }, scene);
   platform3.position = new Vector3(10, 0.25, -7);
-  const platform3Agg = new PhysicsAggregate(platform3, PhysicsShapeType.CYLINDER, { mass: 0, friction: 10 }, scene);
+  const platform3Agg = new PhysicsAggregate(platform3, PhysicsShapeType.CYLINDER, { mass: 0, friction: 0.9 }, scene);
   platform3Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
   platform3Agg.body.setPrestepType(PhysicsPrestepType.ACTION);
   const platform3Mat = new GridMaterial("platform3Mat", scene);
@@ -300,10 +313,6 @@ HavokPhysics().then((hp) => {
   const onBeforeRenderObservableEveryQrtrSecond = createThrottler(250);
   const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
   scene.onBeforeRenderObservable.add((scene) => {
-    if (scene.deltaTime == undefined) return;
-    const deltaTimeS = scene.deltaTime / 1000.0;
-    if (deltaTimeS == 0) return;
-
     camera.position.copyFrom(character.position);
 
     characterFeet.position.x = character.position.x;
@@ -346,21 +355,23 @@ HavokPhysics().then((hp) => {
     }
 
     if (onBeforeRenderObservableEveryHalfSecond()) {
-      debugGuiFpsTextBlock.text = `FPS: ${Math.round(engine.getFps())}`;
+      debugGuiFpsTextBlock.text = `FPS: ${Math.round(engine.getFps())}, D: ${scene.deltaTime}`;
     }
   });
 
   const onAfterPhysicsObservableEvery50Ms = createThrottler(50);
   scene.onAfterPhysicsObservable.add((scene) => {
     if (platform1GoingUp) {
-      if (platform1Agg.transformNode.position.y >= 6.75) platform1GoingUp = false;
+      if (platform1Agg.transformNode.position.y >= 6.75) {
+        platform1.physicsBody?.setLinearVelocity(Vector3.Down());
+        platform1GoingUp = false;
+      }
     } else {
-      if (platform1Agg.transformNode.position.y <= 0.25) platform1GoingUp = true;
+      if (platform1Agg.transformNode.position.y <= 0.25) {
+        platform1.physicsBody?.setLinearVelocity(Vector3.Up());
+        platform1GoingUp = true;
+      }
     }
-    platform1Agg.body.setTargetTransform(
-      platform1Transform.set(platform1.position.x, platform1.position.y + (platform1GoingUp ? 1 : -1) * 0.01, platform1.position.z),
-      quaternionZeroReadonly
-    );
 
     if (platform2GoingUp) {
       if (platform2Agg.transformNode.position.y >= 6.75) platform2GoingUp = false;
@@ -368,22 +379,29 @@ HavokPhysics().then((hp) => {
       if (platform2Agg.transformNode.position.y <= 0.25) platform2GoingUp = true;
     }
     platform2Agg.body.setTargetTransform(
-      platform2Transform.set(platform2.position.x, platform2.position.y + (platform2GoingUp ? 6 * platform2.position.y : -1) * 0.01, platform2.position.z),
+      platform2Transform.set(platform2.position.x, platform2.position.y + (platform2GoingUp ? 6 * platform2.position.y : -1) * 0.03, platform2.position.z),
       quaternionZeroReadonly
     );
 
-    platform3.addRotation(0, 0.01, 0);
+    platform3Agg.transformNode.addRotation(0, 0.03, 0);
 
-    characterWasdDirection.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdVelocity).normalize(); // characterWasdVelocity has still an intermediate value, not the final one
     if (characterWantJump && characterCanJump) {
       characterJumpImpulse.copyFrom(Vector3.UpReadOnly).scaleInPlace(characterJumpImpulseSize);
       characterAgg.body.applyImpulse(characterJumpImpulse, character.position);
       characterCanJump = false;
     }
 
+    characterAgg.body.getLinearVelocityToRef(characterLinearVelocity);
+
     if (onAfterPhysicsObservableEvery50Ms()) {
-      characterAgg.body.getLinearVelocityToRef(characterLinearVelocity);
-      if (Math.sqrt(Math.pow(characterLinearVelocity.x, 2) + Math.pow(characterLinearVelocity.z, 2)) < characterWasdMaxSpeed) {
+      characterWasdDirection.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdVelocity).normalize();
+      characterLinearVelocityXZ.x = characterLinearVelocity.x;
+      characterLinearVelocityXZ.z = characterLinearVelocity.z;
+      const speedsUpWithinLimits = Math.sqrt(Math.pow(characterLinearVelocity.x, 2) + Math.pow(characterLinearVelocity.z, 2)) < characterWasdMaxSpeed;
+      const slowsDown =
+        characterLinearVelocityXZ.length() <
+        characterLinearVelocityXZ.subtractToRef(characterWasdVelocity, characterLinearVelocityXZMinusWasdVelocity).length();
+      if (speedsUpWithinLimits || slowsDown) {
         characterAgg.body.applyImpulse(characterWasdVelocity, character.position);
       }
     }
