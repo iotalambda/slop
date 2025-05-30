@@ -92,6 +92,7 @@ HavokPhysics().then((hp) => {
 
   let camera: Camera;
   const cameraRotationQuaternion = Quaternion.Zero();
+  const cameraInitFirstPerson = false;
   function replaceWithFirstPersonCamera() {
     if (camera?.isDisposed() === false) {
       camera.dispose();
@@ -111,10 +112,16 @@ HavokPhysics().then((hp) => {
     c.minZ = 0;
     camera = c;
   }
-  character.isVisible = false;
-  characterFeet.isVisible = false;
-  characterOrientationQuaternion.copyFrom(Quaternion.RotationAxis(Axis.Y, Math.PI / 1.5));
-  replaceWithFirstPersonCamera();
+  if (cameraInitFirstPerson) {
+    character.isVisible = false;
+    characterFeet.isVisible = false;
+    characterOrientationQuaternion.copyFrom(Quaternion.RotationAxis(Axis.Y, Math.PI / 1.5));
+    replaceWithFirstPersonCamera();
+  } else {
+    character.isVisible = true;
+    characterFeet.isVisible = true;
+    replaceWithArcRotateCamera();
+  }
 
   const xyzIndicator = MeshBuilder.CreateSphere("xyzIndicator", { diameter: 0.2, segments: 1 }, scene);
   const xyzIndicatorPositionPrev = xyzIndicator.position.clone();
@@ -238,7 +245,7 @@ HavokPhysics().then((hp) => {
   const debugToggleCameraCheckbox = new Checkbox("toggleCameraCheckbox");
   debugToggleCameraCheckbox.color = "white";
   debugToggleCameraCheckbox.fontSize = 20;
-  debugToggleCameraCheckbox.isChecked = false;
+  debugToggleCameraCheckbox.isChecked = !cameraInitFirstPerson;
   debugToggleCameraCheckbox.widthInPixels = 20;
   debugToggleCameraCheckbox.heightInPixels = 20;
   debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
