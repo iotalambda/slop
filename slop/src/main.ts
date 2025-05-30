@@ -66,26 +66,28 @@ HavokPhysics().then((hp) => {
   const characterJumpImpulse = Vector3.Zero();
   const characterJumpImpulseSize = 9.0;
   const characterWasdMaxSpeed = 5.0;
+  const characterInertiaUprightGround = 999999;
+  const characterInertiaAirOrFallen = 1;
   let characterWantJump = false;
   let characterCanJump = false;
-  let characterUprightOnJumpablePlatform = false;
+  let characterOnJumpablePlatform = false;
   let characterMsSinceJump = 0;
   const characterMinMsBetweenJumps = 500;
   const characterStepImpulseSize = 1.2;
   const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CYLINDER, { mass: 1, friction: 1, restitution: 0 }, scene);
   characterAgg.body.setMassProperties({
     ...characterAgg.body.getMassProperties(),
-    inertia: new Vector3(999999, 0.01, 999999),
+    inertia: new Vector3(characterInertiaUprightGround, 0.01, characterInertiaUprightGround),
   });
   characterAgg.body.setLinearDamping(0.2);
   characterAgg.body.setAngularDamping(0.5);
 
-  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.9, height: 0.25, tessellation: 8 }, scene);
-  characterFeet.position = new Vector3(0, -1.5);
+  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.8, height: 1.25, tessellation: 8 }, scene);
+  characterFeet.position = new Vector3(0, -0.6);
   const characterFeetMat = new StandardMaterial("characterFeetMat", scene);
   characterFeetMat.diffuseColor = Color3.Red();
   characterFeet.material = characterFeetMat;
-  const characterFeetAgg = new PhysicsAggregate(characterFeet, PhysicsShapeType.SPHERE, { mass: 0 }, scene);
+  const characterFeetAgg = new PhysicsAggregate(characterFeet, PhysicsShapeType.CYLINDER, { mass: 0 }, scene);
   characterFeetAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
   characterFeetAgg.body.disablePreStep = false;
   characterFeetAgg.shape.isTrigger = true;
@@ -145,7 +147,7 @@ HavokPhysics().then((hp) => {
 
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
-  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.5, restitution: 0 }, scene);
+  new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.8, restitution: 0 }, scene);
   const blockMat = new GridMaterial("blockMat", scene);
   blockMat.lineColor = Color3.Yellow();
   blockMat.gridRatio = 0.5;
@@ -197,8 +199,8 @@ HavokPhysics().then((hp) => {
   //   boxN.material = boxNMat;
   // }
 
-  const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 5, height: 0.5, tessellation: 8 }, scene);
-  platform3.position = new Vector3(10, 0.25, -7);
+  const platform3 = MeshBuilder.CreateCylinder("platform3", { diameter: 10, height: 0.5, tessellation: 8 }, scene);
+  platform3.position = new Vector3(10, 2.25, -7);
   const platform3Agg = new PhysicsAggregate(platform3, PhysicsShapeType.CYLINDER, { mass: 0, friction: 0.9 }, scene);
   platform3Agg.body.setMotionType(PhysicsMotionType.ANIMATED);
   platform3Agg.body.setPrestepType(PhysicsPrestepType.ACTION);
@@ -212,14 +214,29 @@ HavokPhysics().then((hp) => {
     return ev.collider === collider || ev.collidedAgainst === collider;
   }
 
+  let platformCounter = 0;
   hk.onTriggerCollisionObservable.add((ev) => {
     if (inCollision(ev, characterFeetAgg.body)) {
       if (!inCollision(ev, characterAgg.body)) {
         if (ev.type === PhysicsEventType.TRIGGER_ENTERED) {
-          characterUprightOnJumpablePlatform = true;
+          platformCounter++;
+          if (platformCounter === 1) {
+            characterOnJumpablePlatform = true;
+            characterAgg.body.setMassProperties({
+              ...characterAgg.body.getMassProperties(),
+              inertia: new Vector3(characterInertiaUprightGround, 0.01, characterInertiaUprightGround),
+            });
+          }
         } else if (ev.type === PhysicsEventType.TRIGGER_EXITED) {
-          characterUprightOnJumpablePlatform = false;
-          characterCanJump = false;
+          platformCounter--;
+          if (platformCounter === 0) {
+            characterOnJumpablePlatform = false;
+            characterCanJump = false;
+            characterAgg.body.setMassProperties({
+              ...characterAgg.body.getMassProperties(),
+              inertia: new Vector3(characterInertiaAirOrFallen, 0.01, characterInertiaAirOrFallen),
+            });
+          }
         }
       }
     }
@@ -228,7 +245,7 @@ HavokPhysics().then((hp) => {
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
   const debugPanel = new StackPanel();
-  debugPanel.widthInPixels = 200;
+  debugPanel.widthInPixels = 300;
   debugPanel.isVertical = true;
   debugPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
@@ -236,7 +253,7 @@ HavokPhysics().then((hp) => {
   debugGui.addControl(debugPanel);
 
   const debugToggleCameraPanel = new StackPanel();
-  debugToggleCameraPanel.widthInPixels = 200;
+  debugToggleCameraPanel.widthInPixels = 300;
   debugToggleCameraPanel.heightInPixels = 30;
   debugToggleCameraPanel.isVertical = false;
   debugToggleCameraPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
@@ -270,7 +287,7 @@ HavokPhysics().then((hp) => {
   debugToggleCameraPanel.addControl(debugToggleCameraTextBlock);
 
   const debugToggleXYZIndicatorPanel = new StackPanel();
-  debugToggleXYZIndicatorPanel.widthInPixels = 200;
+  debugToggleXYZIndicatorPanel.widthInPixels = 300;
   debugToggleXYZIndicatorPanel.heightInPixels = 30;
   debugToggleXYZIndicatorPanel.isVertical = false;
   debugToggleXYZIndicatorPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
@@ -325,24 +342,30 @@ HavokPhysics().then((hp) => {
 
   const onBeforeRenderObservableEveryQrtrSecond = createThrottler(250);
   const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
+  let gettingUp = false;
+  let characterRotationPrevX = 0;
+  let characterRotationPrevZ = 0;
   scene.onBeforeRenderObservable.add((scene) => {
     camera.position.copyFrom(character.position);
 
     characterFeet.position.x = character.position.x;
-    characterFeet.position.y = character.position.y - 0.996;
+    characterFeet.position.y = character.position.y - 0.6;
     characterFeet.position.z = character.position.z;
 
     let cameraPitch: number;
     let cameraYaw: number;
+    const characterRotationPrevY = characterRotation.y;
+    character.rotationQuaternion?.toEulerAnglesToRef(characterRotation);
     if (camera instanceof UniversalCamera) {
-      const prevY = characterRotation.y;
-      character.rotationQuaternion?.toEulerAnglesToRef(characterRotation);
-      if (characterRotation.y !== prevY) {
-        camera.rotation.y -= prevY - character.rotation.y;
-      }
+      characterRotationPrevX = character.rotation.x;
+      characterRotationPrevZ = character.rotation.z;
+      camera.rotation.x += character.rotation.x;
+      camera.rotation.y -= characterRotationPrevY - character.rotation.y;
+      camera.rotation.z += character.rotation.z;
       cameraPitch = camera.rotation.x;
       cameraYaw = camera.rotation.y;
     } else if (camera instanceof ArcRotateCamera) {
+      camera.alpha += characterRotationPrevY - character.rotation.y;
       cameraPitch = -camera.beta + Math.PI / 2;
       cameraYaw = -camera.alpha - Math.PI / 2;
     } else {
@@ -396,7 +419,7 @@ HavokPhysics().then((hp) => {
       quaternionZeroReadonly
     );
 
-    platform3Agg.transformNode.addRotation(0, 0.03, 0);
+    platform3Agg.transformNode.addRotation(0.0009, 0.025, 0.0009);
 
     if (characterWantJump && characterCanJump) {
       characterJumpImpulse.copyFrom(Vector3.UpReadOnly).scaleInPlace(characterJumpImpulseSize);
@@ -408,11 +431,12 @@ HavokPhysics().then((hp) => {
     if (!characterCanJump) {
       if (characterMsSinceJump < characterMinMsBetweenJumps) {
         characterMsSinceJump += scene.deltaTime;
-      } else if (characterUprightOnJumpablePlatform) {
+      } else if (characterOnJumpablePlatform) {
         characterCanJump = true;
       }
     }
 
+    const tilt = Math.abs(Math.acos(Math.cos(character.rotation.x) * Math.cos(character.rotation.z)));
     if (onAfterPhysicsObservableEvery50Ms()) {
       const anyWasdKeyDown = wasdKeysDown.w || wasdKeysDown.a || wasdKeysDown.s || wasdKeysDown.d;
       if (anyWasdKeyDown) {
@@ -430,6 +454,30 @@ HavokPhysics().then((hp) => {
           if (!characterWantJump && characterCanJump) characterWasdVelocity.y -= characterStepImpulseSize;
         }
       }
+
+      if (characterOnJumpablePlatform && tilt > 0.0001 && !gettingUp) {
+        gettingUp = true;
+        characterAgg.body.setPrestepType(PhysicsPrestepType.TELEPORT);
+      } else if (gettingUp) {
+        gettingUp = false;
+        characterAgg.body.setPrestepType(PhysicsPrestepType.DISABLED);
+      }
+    }
+
+    if (gettingUp) {
+      characterAgg.body.setAngularVelocity(new Vector3(0, 0, 0));
+      if (tilt >= 0.2) {
+        character.addRotation(-0.1 * character.rotation.x, 0, -0.1 * character.rotation.z);
+      } else {
+        character.addRotation(-character.rotation.x, 0, -character.rotation.z);
+      }
+    }
+  });
+
+  scene.onAfterRenderObservable.add((scene) => {
+    if (camera instanceof UniversalCamera) {
+      camera.rotation.x -= characterRotationPrevX;
+      camera.rotation.z -= characterRotationPrevZ;
     }
   });
 
