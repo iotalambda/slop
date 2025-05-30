@@ -52,7 +52,7 @@ HavokPhysics().then((hp) => {
 
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
 
-  const character = MeshBuilder.CreateCylinder("character", { height: 2 }, scene);
+  const character = MeshBuilder.CreateCylinder("character", { diameter: 1, height: 2 }, scene);
   character.position = new Vector3(9, 13, 5);
   character.visibility = 0.5;
   const characterWasdDirection = Vector3.Zero();
@@ -67,6 +67,9 @@ HavokPhysics().then((hp) => {
   const characterWasdMaxSpeed = 5.0;
   let characterWantJump = false;
   let characterCanJump = false;
+  let characterUprightOnJumpablePlatform = false;
+  let characterMsSinceJump = 0;
+  const characterMinMsBetweenJumps = 500;
   const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CYLINDER, { mass: 1, friction: 1, restitution: 0 }, scene);
   characterAgg.body.setMassProperties({
     ...characterAgg.body.getMassProperties(),
@@ -75,7 +78,7 @@ HavokPhysics().then((hp) => {
   characterAgg.body.setLinearDamping(0.2);
   characterAgg.body.setAngularDamping(0.5);
 
-  const characterFeet = MeshBuilder.CreateSphere("characterFeet", { diameter: 0.2, segments: 1 }, scene);
+  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.9, height: 0.2 }, scene);
   characterFeet.position = new Vector3(0, -1.5);
   const characterFeetMat = new StandardMaterial("characterFeetMat", scene);
   characterFeetMat.diffuseColor = Color3.Red();
@@ -204,9 +207,9 @@ HavokPhysics().then((hp) => {
     if (inCollision(ev, characterFeetAgg.body)) {
       if (!inCollision(ev, characterAgg.body)) {
         if (ev.type === PhysicsEventType.TRIGGER_ENTERED) {
-          characterCanJump = true;
+          characterUprightOnJumpablePlatform = true;
         } else if (ev.type === PhysicsEventType.TRIGGER_EXITED) {
-          characterCanJump = false;
+          characterUprightOnJumpablePlatform = false;
         }
       }
     }
@@ -389,6 +392,15 @@ HavokPhysics().then((hp) => {
       characterJumpImpulse.copyFrom(Vector3.UpReadOnly).scaleInPlace(characterJumpImpulseSize);
       characterAgg.body.applyImpulse(characterJumpImpulse, character.position);
       characterCanJump = false;
+      characterMsSinceJump = 0;
+    }
+
+    if (!characterCanJump) {
+      if (characterMsSinceJump < characterMinMsBetweenJumps) {
+        characterMsSinceJump += scene.deltaTime;
+      } else if (characterUprightOnJumpablePlatform) {
+        characterCanJump = true;
+      }
     }
 
     characterAgg.body.getLinearVelocityToRef(characterLinearVelocity);
