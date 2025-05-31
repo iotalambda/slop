@@ -12,9 +12,10 @@ import {
   PhysicsAggregate,
   PhysicsBody,
   PhysicsEventType,
-  PhysicsMaterialCombineMode,
   PhysicsMotionType,
   PhysicsPrestepType,
+  PhysicsShapeContainer,
+  PhysicsShapeCylinder,
   PhysicsShapeType,
   PhysicsViewer,
   Quaternion,
@@ -54,8 +55,9 @@ HavokPhysics().then((hp) => {
 
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
 
-  const character = MeshBuilder.CreateCylinder("character", { diameter: 1, height: 2, tessellation: 8 }, scene);
+  const character = MeshBuilder.CreateCylinder("character", { diameter: 1, height: 1.8 }, scene);
   character.position = new Vector3(9, 13, 5);
+  character.setPivotPoint(new Vector3(0, -0.2, 0));
   character.visibility = 0.5;
   const characterWasdDirection = Vector3.Zero();
   const characterWasdVelocity = Vector3.Zero();
@@ -68,14 +70,19 @@ HavokPhysics().then((hp) => {
   const characterJumpImpulseSize = 9.0;
   const characterWasdMaxSpeed = 5.0;
   const characterInertiaUprightGround = 999999;
-  const characterInertiaAirOrFallen = 1;
+  const characterInertiaAirOrFallen = 9;
   let characterWantJump = false;
   let characterCanJump = false;
   let characterOnJumpablePlatform = false;
   let characterMsSinceJump = 0;
   const characterMinMsBetweenJumps = 500;
   const characterStepImpulseSize = 1.2;
-  const characterAgg = new PhysicsAggregate(character, PhysicsShapeType.CYLINDER, { mass: 1, friction: 1, restitution: 0 }, scene);
+  const characterShpCtr = new PhysicsShapeContainer(scene);
+  characterShpCtr.material = { ...characterShpCtr.material, friction: 0 };
+  const characterShp = PhysicsShapeCylinder.FromMesh(character);
+  characterShp.material = { ...characterShp.material, friction: 0 };
+  characterShpCtr.addChild(characterShp);
+  const characterAgg = new PhysicsAggregate(character, characterShpCtr, { mass: 1, restitution: 0 }, scene);
   characterAgg.body.setMassProperties({
     ...characterAgg.body.getMassProperties(),
     inertia: new Vector3(characterInertiaUprightGround, 0.01, characterInertiaUprightGround),
@@ -83,7 +90,12 @@ HavokPhysics().then((hp) => {
   characterAgg.body.setLinearDamping(0.2);
   characterAgg.body.setAngularDamping(0.5);
 
-  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.8, height: 1.25, tessellation: 8 }, scene);
+  const characterShoesShp = new PhysicsShapeCylinder(new Vector3(0, -0.9, 0), new Vector3(0, -1.0, 0), 0.4, scene);
+  characterShoesShp.material = { ...characterShoesShp.material, friction: 1 };
+  characterShpCtr.addChild(characterShoesShp);
+  // physicsViewer.showBody(characterAgg.body);
+
+  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.8, height: 1.25 }, scene);
   characterFeet.position = new Vector3(0, -0.6);
   const characterFeetMat = new StandardMaterial("characterFeetMat", scene);
   characterFeetMat.diffuseColor = Color3.Red();
