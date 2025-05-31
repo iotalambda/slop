@@ -12,6 +12,7 @@ import {
   PhysicsAggregate,
   PhysicsBody,
   PhysicsEventType,
+  PhysicsMaterialCombineMode,
   PhysicsMotionType,
   PhysicsPrestepType,
   PhysicsShapeType,
@@ -94,7 +95,7 @@ HavokPhysics().then((hp) => {
 
   let camera: Camera;
   const cameraRotationQuaternion = Quaternion.Zero();
-  const cameraInitFirstPerson = false;
+  const cameraInitFirstPerson = true;
   function replaceWithFirstPersonCamera() {
     if (camera?.isDisposed() === false) {
       camera.dispose();
@@ -343,6 +344,7 @@ HavokPhysics().then((hp) => {
   const onBeforeRenderObservableEveryQrtrSecond = createThrottler(250);
   const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
   let gettingUp = false;
+  let gettingUpFinalize = false;
   let characterRotationPrevX = 0;
   let characterRotationPrevZ = 0;
   scene.onBeforeRenderObservable.add((scene) => {
@@ -455,16 +457,27 @@ HavokPhysics().then((hp) => {
         }
       }
 
+      if (gettingUpFinalize) {
+        gettingUpFinalize = false;
+        characterAgg.body.setPrestepType(PhysicsPrestepType.DISABLED);
+        characterAgg.body.setMotionType(PhysicsMotionType.DYNAMIC);
+      }
+
       if (characterOnJumpablePlatform && tilt > 0.0001 && !gettingUp) {
         gettingUp = true;
         characterAgg.body.setPrestepType(PhysicsPrestepType.TELEPORT);
       } else if (gettingUp) {
         gettingUp = false;
-        characterAgg.body.setPrestepType(PhysicsPrestepType.DISABLED);
+        if (tilt <= 0.0001) {
+          gettingUpFinalize = true;
+          characterAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
+        } else {
+          characterAgg.body.setPrestepType(PhysicsPrestepType.DISABLED);
+        }
       }
     }
 
-    if (gettingUp) {
+    if (gettingUp || gettingUpFinalize) {
       characterAgg.body.setAngularVelocity(new Vector3(0, 0, 0));
       if (tilt >= 0.2) {
         character.addRotation(-0.1 * character.rotation.x, 0, -0.1 * character.rotation.z);
