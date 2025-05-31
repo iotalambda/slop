@@ -90,7 +90,7 @@ HavokPhysics().then((hp) => {
   characterAgg.body.setLinearDamping(0.2);
   characterAgg.body.setAngularDamping(0.5);
 
-  const characterShoesShp = new PhysicsShapeCylinder(new Vector3(0, -0.9, 0), new Vector3(0, -1.0, 0), 0.4, scene);
+  const characterShoesShp = new PhysicsShapeCylinder(new Vector3(0, 0, 0), new Vector3(0, -1.0, 0), 0.4, scene);
   characterShoesShp.material = { ...characterShoesShp.material, friction: 1 };
   characterShpCtr.addChild(characterShoesShp);
   // physicsViewer.showBody(characterAgg.body);
