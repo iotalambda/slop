@@ -227,12 +227,21 @@ HavokPhysics().then((hp) => {
     return ev.collider === collider || ev.collidedAgainst === collider;
   }
 
+  function getOtherInCollision(ev: IBasePhysicsCollisionEvent, collider: PhysicsBody) {
+    if (ev.collider === collider) return ev.collidedAgainst;
+    return ev.collider;
+  }
+
   let platformCounter = 0;
   hk.onTriggerCollisionObservable.add((ev) => {
     if (inCollision(ev, characterFeetAgg.body)) {
       if (!inCollision(ev, characterAgg.body)) {
         if (ev.type === PhysicsEventType.TRIGGER_ENTERED) {
           platformCounter++;
+          const other = getOtherInCollision(ev, characterFeetAgg.body);
+          if (other.getMotionType() === PhysicsMotionType.ANIMATED) {
+            stoodOnAnimatedSinceLastAir = true;
+          }
           if (platformCounter === 1) {
             characterOnJumpablePlatform = true;
             characterAgg.body.setMassProperties({
@@ -245,6 +254,7 @@ HavokPhysics().then((hp) => {
           if (platformCounter === 0) {
             characterOnJumpablePlatform = false;
             characterCanJump = false;
+            stoodOnAnimatedSinceLastAir = false;
             characterAgg.body.setMassProperties({
               ...characterAgg.body.getMassProperties(),
               inertia: new Vector3(characterInertiaAirOrFallen, 0.01, characterInertiaAirOrFallen),
@@ -357,6 +367,7 @@ HavokPhysics().then((hp) => {
   const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
   let gettingUp = false;
   let gettingUpFinalize = false;
+  let stoodOnAnimatedSinceLastAir = false;
   let characterRotationPrevX = 0;
   let characterRotationPrevZ = 0;
   scene.onBeforeRenderObservable.add((scene) => {
@@ -480,7 +491,7 @@ HavokPhysics().then((hp) => {
         characterAgg.body.setPrestepType(PhysicsPrestepType.TELEPORT);
       } else if (gettingUp) {
         gettingUp = false;
-        if (tilt <= 0.0001) {
+        if (tilt <= 0.0001 && !stoodOnAnimatedSinceLastAir) {
           gettingUpFinalize = true;
           characterAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
         } else {
