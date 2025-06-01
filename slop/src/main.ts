@@ -57,13 +57,13 @@ HavokPhysics().then((hp) => {
 
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
 
-  const characterDiameter = 1.0;
+  const characterDiameter = 0.9;
   const character = MeshBuilder.CreateCylinder("character", { diameter: characterDiameter, height: 1.8 }, scene);
   character.position = new Vector3(9, 13, 5);
   character.setPivotPoint(new Vector3(0, -0.2, 0));
   character.visibility = 0.5;
-  const characterWasdDirection = Vector3.Zero();
-  const characterWasdVelocity = Vector3.Zero();
+  const characterWasdDirectionLocal = Vector3.Zero();
+  const characterWasdDirectionWorld = Vector3.Zero();
   const characterLinearVelocity = Vector3.Zero();
   const characterLinearVelocityXZ = Vector3.Zero();
   const characterLinearVelocityXZMinusWasdVelocity = Vector3.Zero();
@@ -92,16 +92,15 @@ HavokPhysics().then((hp) => {
     ...characterAgg.body.getMassProperties(),
     inertia: new Vector3(characterInertiaXZUprightGround, characterInertiaYOnAnimated, characterInertiaXZUprightGround),
   });
-  characterAgg.body.setLinearDamping(0.2);
+  characterAgg.body.setLinearDamping(0.15);
   characterAgg.body.setAngularDamping(0.5);
 
   const characterShoesShp = new PhysicsShapeCylinder(new Vector3(0, 0, 0), new Vector3(0, -1.0, 0), characterDiameter * 0.4, scene);
   characterShoesShp.material = { ...characterShoesShp.material, friction: 1 };
   characterShpCtr.addChild(characterShoesShp);
 
-  // const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.8, height: 1.25 }, scene);
-  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: 0.06, height: 1.25 }, scene);
-  const characterFeetY = -0.55;
+  const characterFeet = MeshBuilder.CreateCylinder("characterFeet", { diameter: characterDiameter * 0.16, height: 1.25 }, scene);
+  const characterFeetY = -0.6;
   characterFeet.position = new Vector3(0, characterFeetY);
   const characterFeetMat = new StandardMaterial("characterFeetMat", scene);
   characterFeetMat.diffuseColor = Color3.Red();
@@ -172,15 +171,15 @@ HavokPhysics().then((hp) => {
   blockMat.gridRatio = 0.5;
   block.material = blockMat;
 
-  for (let i = 0; i < 5; i++) {
-    const slope = MeshBuilder.CreateBox(`slope${i}`, { width: 16, height: 0.5, depth: 3 }, scene);
+  for (let i = 0; i < 10; i++) {
+    const slope = MeshBuilder.CreateBox(`slope${i}`, { width: 24, height: 0.5, depth: 3 }, scene);
     slope.position = new Vector3(-28, 1, -5 + 4 * i);
     slope.rotation.set(0, 0, -0.2 + -0.15 * i);
     const slopeMat = new GridMaterial(`slope${i}Mat`, scene);
     slopeMat.lineColor = Color3.White();
     slopeMat.gridRatio = 0.5;
     slope.material = slopeMat;
-    const slopeAgg = new PhysicsAggregate(slope, PhysicsShapeType.BOX, { mass: 0, friction: 0.5, restitution: 0 });
+    const slopeAgg = new PhysicsAggregate(slope, PhysicsShapeType.BOX, { mass: 0, friction: 0.6, restitution: 0 });
   }
 
   const platform1 = MeshBuilder.CreateBox("platform1", { width: 2, height: 0.5, depth: 2 }, scene);
@@ -482,7 +481,7 @@ HavokPhysics().then((hp) => {
 
     const tilt = Math.abs(Math.acos(Math.cos(character.rotation.x) * Math.cos(character.rotation.z)));
 
-    if (characterWantJump && characterCanJump && tilt < 0.1) {
+    if (characterWantJump && characterCanJump && tilt < 0.05) {
       characterJumpImpulse.copyFrom(Vector3.UpReadOnly).scaleInPlace(characterJumpImpulseSize);
       characterAgg.body.applyImpulse(characterJumpImpulse, character.position);
       characterCanJump = false;
@@ -501,17 +500,17 @@ HavokPhysics().then((hp) => {
       const anyWasdKeyDown = wasdKeysDown.w || wasdKeysDown.a || wasdKeysDown.s || wasdKeysDown.d;
       if (anyWasdKeyDown) {
         characterAgg.body.getLinearVelocityToRef(characterLinearVelocity);
-        characterWasdDirection.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdVelocity).normalize();
+        characterWasdDirectionLocal.applyRotationQuaternionToRef(characterOrientationQuaternion, characterWasdDirectionWorld).normalize();
         characterLinearVelocityXZ.x = characterLinearVelocity.x;
         characterLinearVelocityXZ.z = characterLinearVelocity.z;
         const speedsUpWithinLimits = Math.sqrt(Math.pow(characterLinearVelocity.x, 2) + Math.pow(characterLinearVelocity.z, 2)) < characterWasdMaxSpeed;
         const slowsDown =
           characterLinearVelocityXZ.length() <
-          characterLinearVelocityXZ.subtractToRef(characterWasdVelocity, characterLinearVelocityXZMinusWasdVelocity).length();
+          characterLinearVelocityXZ.subtractToRef(characterWasdDirectionWorld, characterLinearVelocityXZMinusWasdVelocity).length();
         if (!gettingUp && (speedsUpWithinLimits || slowsDown)) {
-          if (!characterWantJump && characterCanJump) characterWasdVelocity.y += characterStepImpulseSize;
-          characterAgg.body.applyImpulse(characterWasdVelocity, character.position);
-          if (!characterWantJump && characterCanJump) characterWasdVelocity.y -= characterStepImpulseSize;
+          if (!characterWantJump && characterCanJump) characterWasdDirectionWorld.y += characterStepImpulseSize;
+          characterAgg.body.applyImpulse(characterWasdDirectionWorld, character.position);
+          if (!characterWantJump && characterCanJump) characterWasdDirectionWorld.y -= characterStepImpulseSize;
         }
       }
 
@@ -526,7 +525,7 @@ HavokPhysics().then((hp) => {
         characterAgg.body.setPrestepType(PhysicsPrestepType.TELEPORT);
       } else if (gettingUp) {
         gettingUp = false;
-        if (tilt <= 0.0001 && !standsOnAnimated) {
+        if (tilt <= 0.0001 && !standsOnAnimated && characterLinearVelocityXZ.length() < 0.01) {
           gettingUpFinalize = true;
           characterAgg.body.setMotionType(PhysicsMotionType.ANIMATED);
         } else {
@@ -551,22 +550,22 @@ HavokPhysics().then((hp) => {
         switch (k.event.key) {
           case "w":
           case "W":
-            characterWasdDirection.z = 1;
+            characterWasdDirectionLocal.z = 1;
             wasdKeysDown.w = true;
             break;
           case "s":
           case "S":
-            characterWasdDirection.z = -1;
+            characterWasdDirectionLocal.z = -1;
             wasdKeysDown.s = true;
             break;
           case "a":
           case "A":
-            characterWasdDirection.x = -1;
+            characterWasdDirectionLocal.x = -1;
             wasdKeysDown.a = true;
             break;
           case "d":
           case "D":
-            characterWasdDirection.x = 1;
+            characterWasdDirectionLocal.x = 1;
             wasdKeysDown.d = true;
             break;
           case " ":
@@ -585,22 +584,22 @@ HavokPhysics().then((hp) => {
           case "w":
           case "W":
             wasdKeysDown.w = false;
-            characterWasdDirection.z = wasdKeysDown.s ? -1 : 0;
+            characterWasdDirectionLocal.z = wasdKeysDown.s ? -1 : 0;
             break;
           case "s":
           case "S":
             wasdKeysDown.s = false;
-            characterWasdDirection.z = wasdKeysDown.w ? 1 : 0;
+            characterWasdDirectionLocal.z = wasdKeysDown.w ? 1 : 0;
             break;
           case "a":
           case "A":
             wasdKeysDown.a = false;
-            characterWasdDirection.x = wasdKeysDown.d ? 1 : 0;
+            characterWasdDirectionLocal.x = wasdKeysDown.d ? 1 : 0;
             break;
           case "d":
           case "D":
             wasdKeysDown.d = false;
-            characterWasdDirection.x = wasdKeysDown.a ? -1 : 0;
+            characterWasdDirectionLocal.x = wasdKeysDown.a ? -1 : 0;
             break;
           case " ":
             characterWantJump = false;
