@@ -26,10 +26,11 @@ import {
   UniversalCamera,
   Vector3,
 } from "@babylonjs/core";
-import { AdvancedDynamicTexture, Checkbox, Control, StackPanel, TextBlock } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Button, Checkbox, Control, StackPanel, TextBlock } from "@babylonjs/gui";
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
+import { initializeLLM } from "./slop-llm";
 
 HavokPhysics().then((hp) => {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -305,8 +306,11 @@ HavokPhysics().then((hp) => {
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
+  const debugPanelWidth = 300;
+  const debugPanelCheckBoxWidth = 20;
+  const debugPanelTextWidth = debugPanelWidth - debugPanelCheckBoxWidth;
   const debugPanel = new StackPanel();
-  debugPanel.widthInPixels = 300;
+  debugPanel.widthInPixels = debugPanelWidth;
   debugPanel.isVertical = true;
   debugPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
@@ -314,7 +318,7 @@ HavokPhysics().then((hp) => {
   debugGui.addControl(debugPanel);
 
   const debugToggleCameraPanel = new StackPanel();
-  debugToggleCameraPanel.widthInPixels = 300;
+  debugToggleCameraPanel.widthInPixels = debugPanelWidth;
   debugToggleCameraPanel.heightInPixels = 30;
   debugToggleCameraPanel.isVertical = false;
   debugToggleCameraPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
@@ -324,7 +328,7 @@ HavokPhysics().then((hp) => {
   debugToggleCameraCheckbox.color = "white";
   debugToggleCameraCheckbox.fontSize = 20;
   debugToggleCameraCheckbox.isChecked = !cameraInitFirstPerson;
-  debugToggleCameraCheckbox.widthInPixels = 20;
+  debugToggleCameraCheckbox.widthInPixels = debugPanelCheckBoxWidth;
   debugToggleCameraCheckbox.heightInPixels = 20;
   debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
     ev.skipNextObservers = true;
@@ -340,6 +344,7 @@ HavokPhysics().then((hp) => {
   });
   debugToggleCameraPanel.addControl(debugToggleCameraCheckbox);
   const debugToggleCameraTextBlock = new TextBlock("toggleCameraTextBlock", "ArcRotateCam");
+  debugToggleCameraTextBlock.widthInPixels = debugPanelTextWidth;
   debugToggleCameraTextBlock.heightInPixels = 30;
   debugToggleCameraTextBlock.color = "white";
   debugToggleCameraTextBlock.fontSize = 20;
@@ -358,7 +363,7 @@ HavokPhysics().then((hp) => {
   debugToggleXYZIndicatorCheckbox.color = "white";
   debugToggleXYZIndicatorCheckbox.fontSize = 20;
   debugToggleXYZIndicatorCheckbox.isChecked = xyzIndicator.isEnabled();
-  debugToggleXYZIndicatorCheckbox.widthInPixels = 20;
+  debugToggleXYZIndicatorCheckbox.widthInPixels = debugPanelCheckBoxWidth;
   debugToggleXYZIndicatorCheckbox.heightInPixels = 20;
   debugToggleXYZIndicatorCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
     ev.skipNextObservers = true;
@@ -366,6 +371,7 @@ HavokPhysics().then((hp) => {
   });
   debugToggleXYZIndicatorPanel.addControl(debugToggleXYZIndicatorCheckbox);
   const debugToggleXYZIndicatorTextBlock = new TextBlock("toggleXYZIndixatorTextBlock", "XyzIndicator");
+  debugToggleXYZIndicatorTextBlock.widthInPixels = debugPanelTextWidth;
   debugToggleXYZIndicatorTextBlock.heightInPixels = 30;
   debugToggleXYZIndicatorTextBlock.color = "white";
   debugToggleXYZIndicatorTextBlock.fontSize = 20;
@@ -386,6 +392,35 @@ HavokPhysics().then((hp) => {
   debugGuiFpsTextBlock.fontSize = 20;
   debugGuiFpsTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.addControl(debugGuiFpsTextBlock);
+
+  const promptPanelWidth = 600;
+  const promptPanel = new StackPanel();
+  promptPanel.widthInPixels = promptPanelWidth;
+  promptPanel.isVertical = true;
+  promptPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  promptPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+  promptPanel.paddingBottomInPixels = 10;
+  promptPanel.paddingLeftInPixels = 10;
+  debugGui.addControl(promptPanel);
+
+  let promptState: "disabled" | "initializing" | "enabled" | "failed" = "disabled";
+  const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "use prompt");
+  promptUsePromptButton.widthInPixels = 150;
+  promptUsePromptButton.heightInPixels = 40;
+  promptUsePromptButton.color = "white";
+  promptUsePromptButton.cornerRadius = 10;
+  promptUsePromptButton.background = "black";
+  promptUsePromptButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  promptUsePromptButton.onPointerClickObservable.addOnce(async () => {
+    promptState = "initializing";
+    const res = await initializeLLM();
+    if (res !== "ok") {
+      promptState = "failed";
+      return;
+    }
+    promptUsePromptButton.dispose();
+  });
+  promptPanel.addControl(promptUsePromptButton);
 
   function createThrottler(ms: number) {
     let endAtMs: number | undefined;
