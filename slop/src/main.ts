@@ -30,7 +30,7 @@ import { AdvancedDynamicTexture, Button, Checkbox, Control, StackPanel, TextBloc
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
-import { initializeLLM } from "./slop-llm";
+import { createMLCEngine, MODEL } from "./slop-llm";
 
 HavokPhysics().then((hp) => {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -404,21 +404,35 @@ HavokPhysics().then((hp) => {
   debugGui.addControl(promptPanel);
 
   let promptState: "disabled" | "initializing" | "enabled" | "failed" = "disabled";
-  const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "use prompt");
+  const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "Use prompt");
   promptUsePromptButton.widthInPixels = 150;
   promptUsePromptButton.heightInPixels = 40;
   promptUsePromptButton.color = "white";
   promptUsePromptButton.cornerRadius = 10;
   promptUsePromptButton.background = "black";
   promptUsePromptButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  promptUsePromptButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
   promptUsePromptButton.onPointerClickObservable.addOnce(async () => {
     promptState = "initializing";
-    const res = await initializeLLM();
-    if (res !== "ok") {
+    promptUsePromptButton.dispose();
+    const promptStateTextBlock = new TextBlock("promptState", "Initializing prompt...");
+    promptStateTextBlock.heightInPixels = 30;
+    promptStateTextBlock.color = "white";
+    promptStateTextBlock.fontSize = 20;
+    promptStateTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    promptPanel.addControl(promptStateTextBlock);
+    const engine = await createMLCEngine((p) => {
+      promptStateTextBlock.text = `Downloading ${MODEL}... ${Math.round(p * 100)}%`;
+      debugGui.update();
+    });
+    if (engine === "sw-failed" || engine === "engine-failed") {
+      promptStateTextBlock.text = "Something went wrong";
+      debugGui.update();
       promptState = "failed";
       return;
     }
-    promptUsePromptButton.dispose();
+    promptStateTextBlock.text = "DONE! TODO: Let user prompt";
+    debugGui.update();
   });
   promptPanel.addControl(promptUsePromptButton);
 
