@@ -1,6 +1,7 @@
 import { CreateServiceWorkerMLCEngine, InitProgressReport, MLCEngineInterface } from "@mlc-ai/web-llm";
 
 export const MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
+// export const MODEL = "Hermes-3-Llama-3.1-8B-q4f16_1-MLC";
 
 export async function createMLCEngine(onProgress: (progress: InitProgressReport) => void): Promise<"sw-failed" | "engine-failed" | MLCEngineInterface> {
   let reg: ServiceWorkerRegistration;
