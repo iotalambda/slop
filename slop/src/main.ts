@@ -306,7 +306,7 @@ HavokPhysics().then((hp) => {
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
-  const debugPanelWidth = 300;
+  const debugPanelWidth = 640;
   const debugPanelCheckBoxWidth = 20;
   const debugPanelTextWidth = debugPanelWidth - debugPanelCheckBoxWidth;
   const debugPanel = new StackPanel();
@@ -321,7 +321,7 @@ HavokPhysics().then((hp) => {
   debugToggleCameraPanel.widthInPixels = debugPanelWidth;
   debugToggleCameraPanel.heightInPixels = 30;
   debugToggleCameraPanel.isVertical = false;
-  debugToggleCameraPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  debugToggleCameraPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugToggleCameraPanel.paddingLeftInPixels = 5;
   debugPanel.addControl(debugToggleCameraPanel);
   const debugToggleCameraCheckbox = new Checkbox("toggleCameraCheckbox");
@@ -353,10 +353,10 @@ HavokPhysics().then((hp) => {
   debugToggleCameraPanel.addControl(debugToggleCameraTextBlock);
 
   const debugToggleXYZIndicatorPanel = new StackPanel();
-  debugToggleXYZIndicatorPanel.widthInPixels = 300;
+  debugToggleXYZIndicatorPanel.widthInPixels = debugPanelTextWidth;
   debugToggleXYZIndicatorPanel.heightInPixels = 30;
   debugToggleXYZIndicatorPanel.isVertical = false;
-  debugToggleXYZIndicatorPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  debugToggleXYZIndicatorPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugToggleXYZIndicatorPanel.paddingLeftInPixels = 5;
   debugPanel.addControl(debugToggleXYZIndicatorPanel);
   const debugToggleXYZIndicatorCheckbox = new Checkbox("toggleXYZIndicatorCheckbox");
@@ -393,9 +393,8 @@ HavokPhysics().then((hp) => {
   debugGuiFpsTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugPanel.addControl(debugGuiFpsTextBlock);
 
-  const promptPanelWidth = 600;
   const promptPanel = new StackPanel();
-  promptPanel.widthInPixels = promptPanelWidth;
+  promptPanel.widthInPixels = debugPanelWidth;
   promptPanel.isVertical = true;
   promptPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   promptPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
@@ -404,37 +403,53 @@ HavokPhysics().then((hp) => {
   debugGui.addControl(promptPanel);
 
   let promptState: "disabled" | "initializing" | "enabled" | "failed" = "disabled";
-  const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "Use prompt");
-  promptUsePromptButton.widthInPixels = 150;
-  promptUsePromptButton.heightInPixels = 40;
-  promptUsePromptButton.color = "white";
-  promptUsePromptButton.cornerRadius = 10;
-  promptUsePromptButton.background = "black";
-  promptUsePromptButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-  promptUsePromptButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-  promptUsePromptButton.onPointerClickObservable.addOnce(async () => {
+  const localStorageUsePrompt = localStorage.getItem("usePrompt") === "true";
+  async function initPrompt() {
     promptState = "initializing";
-    promptUsePromptButton.dispose();
     const promptStateTextBlock = new TextBlock("promptState", "Initializing prompt...");
-    promptStateTextBlock.heightInPixels = 30;
+    promptStateTextBlock.heightInPixels = 60;
     promptStateTextBlock.color = "white";
     promptStateTextBlock.fontSize = 20;
     promptStateTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    promptStateTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    promptStateTextBlock.textWrapping = true;
     promptPanel.addControl(promptStateTextBlock);
     const engine = await createMLCEngine((p) => {
-      promptStateTextBlock.text = `Downloading ${MODEL}... ${Math.round(p * 100)}%`;
+      const percentage = Math.round(p.progress * 100);
+      if (percentage === 0) {
+        promptStateTextBlock.text = `Ensuring ${MODEL}...`;
+      } else {
+        promptStateTextBlock.text = `Downloading ${MODEL}... ${percentage}%`;
+      }
       debugGui.update();
     });
     if (engine === "sw-failed" || engine === "engine-failed") {
-      promptStateTextBlock.text = "Something went wrong";
+      promptStateTextBlock.text = "Something went wrong. If you're using Firefox or similar, it did not yet support WebGPU in Service Workers as of June 2025.";
       debugGui.update();
       promptState = "failed";
       return;
     }
     promptStateTextBlock.text = "DONE! TODO: Let user prompt";
     debugGui.update();
-  });
-  promptPanel.addControl(promptUsePromptButton);
+  }
+  if (localStorageUsePrompt) {
+    scene.onAfterRenderObservable.addOnce(async () => await initPrompt());
+  } else {
+    const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "Use prompt");
+    promptUsePromptButton.widthInPixels = 150;
+    promptUsePromptButton.heightInPixels = 40;
+    promptUsePromptButton.color = "white";
+    promptUsePromptButton.cornerRadius = 10;
+    promptUsePromptButton.background = "black";
+    promptUsePromptButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    promptUsePromptButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    promptUsePromptButton.onPointerClickObservable.addOnce(async () => {
+      promptUsePromptButton.dispose();
+      localStorage.setItem("usePrompt", "true");
+      await initPrompt();
+    });
+    promptPanel.addControl(promptUsePromptButton);
+  }
 
   function createThrottler(ms: number) {
     let endAtMs: number | undefined;

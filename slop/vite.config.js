@@ -5,22 +5,22 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   base: "/slop/",
   optimizeDeps: {
-    exclude: ["@babylonjs/havok"]
+    exclude: ["@babylonjs/havok"],
   },
   plugins: [
     VitePWA({
-      injectRegister: 'inline',
-      registerType: 'autoUpdate',
-      srcDir: 'src',
-      filename: 'sw.ts',
-      strategies: 'injectManifest',
+      injectRegister: "inline",
+      registerType: "autoUpdate",
+      srcDir: "src",
+      filename: "sw.ts",
+      strategies: "injectManifest",
       injectManifest: {
-        maximumFileSizeToCacheInBytes: 1_048_576 * 20
+        maximumFileSizeToCacheInBytes: 1_048_576 * 20,
       },
       devOptions: {
         enabled: true,
-        type: 'module',
-      }
-    })
-  ]
+        type: "module",
+      },
+    }),
+  ],
 });

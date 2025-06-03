@@ -12,14 +12,5 @@ self.addEventListener("install", function () {
 
 self.addEventListener("activate", function (e) {
   e.waitUntil(self.clients.claim());
-});
-
-self.addEventListener("message", function (e) {
-  if (e.data === "ping") {
-    e.source?.postMessage("pong");
-  }
-});
-
-self.addEventListener("activate", function (e) {
   handler = new ServiceWorkerMLCEngineHandler();
 });

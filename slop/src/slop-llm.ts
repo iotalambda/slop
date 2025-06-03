@@ -1,41 +1,33 @@
-import { CreateServiceWorkerMLCEngine, MLCEngineInterface } from "@mlc-ai/web-llm";
+import { CreateServiceWorkerMLCEngine, InitProgressReport, MLCEngineInterface } from "@mlc-ai/web-llm";
 
 export const MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
 
-export async function createMLCEngine(onProgress: (progress: number) => void): Promise<"sw-failed" | "engine-failed" | MLCEngineInterface> {
+export async function createMLCEngine(onProgress: (progress: InitProgressReport) => void): Promise<"sw-failed" | "engine-failed" | MLCEngineInterface> {
+  let reg: ServiceWorkerRegistration;
   if ("serviceWorker" in navigator) {
     try {
-      const sw = await navigator.serviceWorker.getRegistration(new URL("dev-sw.ts", import.meta.url));
-      if (!sw) {
-        console.error("SLOP: sw registration not found");
+      const regOrFalse = await Promise.race([navigator.serviceWorker.ready, new Promise<false>((res) => setTimeout(() => res(false), 3000))]);
+
+      if (regOrFalse === false) {
+        console.error("SLOP: sw did not get ready on time");
         return "sw-failed";
       }
 
-      if (!sw.active) {
+      reg = regOrFalse;
+
+      if (!reg) {
+        console.error("SLOP: sw not found");
+        return "sw-failed";
+      }
+
+      if (!reg.active) {
         console.error("SLOP: sw not active");
         return "sw-failed";
       }
 
-      await sw.update();
-
-      const ac = new AbortController();
-      const pong = await new Promise(function (res) {
-        const timeout = setTimeout(() => ac.abort("SLOP: Timeout"), 1000);
-        navigator.serviceWorker.addEventListener(
-          "message",
-          (e) => {
-            clearTimeout(timeout);
-            res(e.data);
-          },
-          { once: true }
-        );
-        sw.active?.postMessage("ping");
-      });
-      if (pong !== "pong") {
-        console.error("SLOP: sw ping failed");
-        return "sw-failed";
-      }
+      await reg.update();
     } catch (error) {
+      console.error("SLOP: sw failed");
       console.error(error);
       return "sw-failed";
     }
@@ -45,10 +37,25 @@ export async function createMLCEngine(onProgress: (progress: number) => void): P
   }
 
   try {
-    const engine: MLCEngineInterface = await CreateServiceWorkerMLCEngine(MODEL, {
-      initProgressCallback: (r) => onProgress(r.progress),
-    });
-    return engine;
+    let timeout: number;
+    const timeoutPromise = new Promise<false>((res) => (timeout = setTimeout(() => res(false), 5000)));
+    const engineOrFalse = await Promise.race([
+      CreateServiceWorkerMLCEngine(MODEL, {
+        initProgressCallback: (p) => {
+          clearTimeout(timeout);
+          onProgress(p);
+        },
+      }),
+      timeoutPromise,
+    ]);
+
+    if (engineOrFalse === false) {
+      await reg.unregister();
+      location.reload();
+      return (await new Promise(() => {})) as never;
+    }
+
+    return engineOrFalse;
   } catch (error) {
     console.error("SLOP: engine failed");
     console.error(error);
