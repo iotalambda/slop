@@ -1,7 +1,17 @@
 {
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true,
-  "[github-actions-workflow]": {
-    "editor.tabSize": 2
-  }
+    "editor.formatOnSave": true,
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2,
+        "prettier.printWidth": 160
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2,
+        "prettier.printWidth": 160
+    },
+    "[github-actions-workflow]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2
+    }
 }
