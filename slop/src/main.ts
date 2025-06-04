@@ -416,8 +416,10 @@ HavokPhysics().then((hp) => {
       const percentage = Math.round(p.progress * 100);
       if (percentage === 0) {
         promptStateTextBlock.text = `Ensuring ${MODEL}...`;
-      } else {
+      } else if (p.text.includes("Fetching param cache")) {
         promptStateTextBlock.text = `Downloading ${MODEL}... ${percentage}%`;
+      } else {
+        promptStateTextBlock.text = `Preparing ${MODEL}... ${percentage}%`;
       }
       debugGui.update();
     });
