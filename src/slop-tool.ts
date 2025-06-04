@@ -37,21 +37,40 @@ export class SlopTool {
 
   addCubeTrueOrFeedback(parameters: SlopToolAddCubeParams): true | string {
     const feedback: string[] = [];
+
+    if (parameters.colorHex === undefined) {
+      feedback.push("define colorHex.");
+    }
+    if (parameters.width === undefined) {
+      feedback.push("define width.");
+    }
+    if (parameters.xCoordinate === undefined) {
+      feedback.push("define xCoordinate.");
+    }
+    if (parameters.yCoordinate === undefined) {
+      feedback.push("define yCoordinate.");
+    }
+    if (parameters.zCoordinate === undefined) {
+      feedback.push("define zCoordinate.");
+    }
+    if (feedback.length > 0) {
+      return feedback.join(" ");
+    }
+
     if (parameters.width <= 0) {
       feedback.push("width must be >0.");
     }
-    if (parameters.colorHex) {
-      parameters.colorHex = parameters.colorHex.replace(new RegExp(" "), "");
-      if (parameters.colorHex.length === 6 && !parameters.colorHex.startsWith("#")) {
-        parameters.colorHex = `#${parameters.colorHex}`;
-      }
+    parameters.colorHex = parameters.colorHex.replace(new RegExp(" "), "");
+    if (parameters.colorHex.length === 6 && !parameters.colorHex.startsWith("#")) {
+      parameters.colorHex = `#${parameters.colorHex}`;
     }
-    if (!parameters.colorHex || parameters.colorHex.length !== 7) {
+    if (parameters.colorHex.length !== 7) {
       feedback.push("colorHex value must be like `#` plus 6 hex digits.");
     }
     if (feedback.length > 0) {
       return feedback.join(" ");
     }
+
     this.addBox({
       colorHex: parameters.colorHex,
       xCoordinate: parameters.xCoordinate,
@@ -97,16 +116,34 @@ export class SlopTool {
 
   addPoleTrueOrFeedback(parameters: SlopToolAddPoleParams): true | string {
     let feedback: string[] = [];
+
+    if (parameters.colorHex === undefined) {
+      feedback.push("define colorHex.");
+    }
+    if (parameters.height === undefined) {
+      feedback.push("define height.");
+    }
+    if (parameters.xCoordinate === undefined) {
+      feedback.push("define xCoordinate.");
+    }
+    if (parameters.yCoordinate === undefined) {
+      feedback.push("define yCoordinate.");
+    }
+    if (parameters.zCoordinate === undefined) {
+      feedback.push("define zCoordinate.");
+    }
+    if (feedback.length > 0) {
+      return feedback.join(" ");
+    }
+
     if (parameters.height <= 0) {
       feedback.push("height must be >0.");
     }
-    if (parameters.colorHex) {
-      parameters.colorHex = parameters.colorHex.replace(new RegExp(" "), "");
-      if (parameters.colorHex.length === 6 && !parameters.colorHex.startsWith("#")) {
-        parameters.colorHex = `#${parameters.colorHex}`;
-      }
+    parameters.colorHex = parameters.colorHex.replace(new RegExp(" "), "");
+    if (parameters.colorHex.length === 6 && !parameters.colorHex.startsWith("#")) {
+      parameters.colorHex = `#${parameters.colorHex}`;
     }
-    if (!parameters.colorHex || parameters.colorHex.length !== 7) {
+    if (parameters.colorHex.length !== 7) {
       feedback.push("colorHex value must be like `#` plus 6 hex digits.");
     }
     if (parameters.height <= 4) {
@@ -115,6 +152,7 @@ export class SlopTool {
     if (feedback.length > 0) {
       return feedback.join(" ");
     }
+
     this.addBox({
       colorHex: parameters.colorHex,
       xCoordinate: parameters.xCoordinate,
