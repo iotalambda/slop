@@ -60,6 +60,7 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
     ]);
 
     if (engineOrFalse === false) {
+      console.log("SLOP: could not get engine. Restarting...");
       await reg.unregister();
       location.reload();
       return (await new Promise(() => {})) as never;
@@ -69,6 +70,13 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
   } catch (error) {
     console.error("SLOP: engine failed");
     console.error(error);
+    if ((error as string).includes("There is no active service worker")) {
+      console.log("SLOP: there is no active service worker. Restarting...");
+      await reg.unregister();
+      location.reload();
+      return (await new Promise(() => {})) as never;
+    }
+
     return false;
   }
 }
