@@ -3,7 +3,7 @@ import { GridMaterial } from "@babylonjs/materials";
 
 type SlopToolAddCubeParams = { width: number; xCoordinate: number; yCoordinate: number; zCoordinate: number; colorHex: string };
 type SlopToolAddPoleParams = { height: number; xCoordinate: number; yCoordinate: number; zCoordinate: number; colorHex: string };
-const SLOP_TOOL_NAMES = ["addCube", "addPole"] as const;
+export const SLOP_TOOL_NAMES = ["addCube", "addPole"] as const;
 
 export class SlopTool {
   #scene: Scene;
@@ -20,7 +20,7 @@ export class SlopTool {
       case "addPole":
         return this.addPoleTrueOrFeedback(parameters);
       default:
-        return `There is no tool called '${name}'.`;
+        return `There is no function called '${name}'. Use one of these instead: ${SLOP_TOOL_NAMES.map((n) => `'${n}'`).join(", ")}.`;
     }
   }
 
