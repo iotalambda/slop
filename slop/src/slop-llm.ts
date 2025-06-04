@@ -3,7 +3,7 @@ import { CreateServiceWorkerMLCEngine, InitProgressReport, MLCEngineInterface } 
 export const MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
 // export const MODEL = "Hermes-3-Llama-3.1-8B-q4f16_1-MLC";
 
-export async function createMLCEngine(onProgress: (progress: InitProgressReport) => void): Promise<"sw-failed" | "engine-failed" | MLCEngineInterface> {
+export async function createMLCEngineOrFalse(onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
   let reg: ServiceWorkerRegistration;
   if ("serviceWorker" in navigator) {
     try {
@@ -11,30 +11,30 @@ export async function createMLCEngine(onProgress: (progress: InitProgressReport)
 
       if (regOrFalse === false) {
         console.error("SLOP: sw did not get ready on time");
-        return "sw-failed";
+        return false;
       }
 
       reg = regOrFalse;
 
       if (!reg) {
         console.error("SLOP: sw not found");
-        return "sw-failed";
+        return false;
       }
 
       if (!reg.active) {
         console.error("SLOP: sw not active");
-        return "sw-failed";
+        return false;
       }
 
       await reg.update();
     } catch (error) {
       console.error("SLOP: sw failed");
       console.error(error);
-      return "sw-failed";
+      return false;
     }
   } else {
     console.error("SLOP: sw not supported");
-    return "sw-failed";
+    return false;
   }
 
   try {
@@ -60,6 +60,6 @@ export async function createMLCEngine(onProgress: (progress: InitProgressReport)
   } catch (error) {
     console.error("SLOP: engine failed");
     console.error(error);
-    return "engine-failed";
+    return false;
   }
 }

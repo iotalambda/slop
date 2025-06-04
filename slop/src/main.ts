@@ -28,7 +28,7 @@ import { AdvancedDynamicTexture, Button, Checkbox, Control, InputText, StackPane
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
-import { createMLCEngine, MODEL } from "./slop-llm";
+import { createMLCEngineOrFalse, MODEL } from "./slop-llm";
 import { ChatCompletionRequest } from "@mlc-ai/web-llm";
 import { SlopTool } from "./slop-tool";
 
@@ -238,7 +238,8 @@ HavokPhysics().then((hp) => {
   platform3Mat.lineColor = Color3.Red();
   platform3Mat.gridRatio = 0.5;
   platform3.material = platform3Mat;
-  // physicsViewer.showBody(platform3Agg.body);
+  let platform3Clockwise = true;
+  let platform3Acc = 0;
 
   function inCollision(ev: IBasePhysicsCollisionEvent, collider: PhysicsBody) {
     return ev.collider === collider || ev.collidedAgainst === collider;
@@ -414,7 +415,7 @@ HavokPhysics().then((hp) => {
     promptStateTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptStateTextBlock.textWrapping = true;
     promptPanel.addControl(promptStateTextBlock);
-    const engine = await createMLCEngine((p) => {
+    const engine = await createMLCEngineOrFalse((p) => {
       const percentage = Math.round(p.progress * 100);
       if (percentage === 0) {
         promptStateTextBlock.text = `Ensuring ${MODEL}...`;
@@ -423,7 +424,7 @@ HavokPhysics().then((hp) => {
       }
       debugGui.update();
     });
-    if (engine === "sw-failed" || engine === "engine-failed") {
+    if (engine === false) {
       promptStateTextBlock.text = "Something went wrong. If you're using Firefox or similar, it did not yet support WebGPU in Service Workers as of June 2025.";
       debugGui.update();
       return;
@@ -716,7 +717,11 @@ You are a helpful Assistant.`,
       quaternionZeroReadonly
     );
 
-    platform3Agg.transformNode.addRotation(0.0009, 0.025, 0.0009);
+    platform3Acc += (platform3Clockwise ? 1 : -1) * 0.002;
+    if (platform3Acc > 0.2 || platform3Acc < -0.2) {
+      platform3Clockwise = !platform3Clockwise;
+    }
+    platform3Agg.transformNode.addRotation(0, platform3Acc, 0);
 
     const tilt = Math.abs(Math.acos(Math.cos(character.rotation.x) * Math.cos(character.rotation.z)));
 
