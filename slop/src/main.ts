@@ -28,8 +28,7 @@ import { AdvancedDynamicTexture, Button, Checkbox, Control, InputText, StackPane
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
-import { createMLCEngineOrFalse, MODEL } from "./slop-llm";
-import { ChatCompletionRequest } from "@mlc-ai/web-llm";
+import { createMLCEngineOrFalse, MODEL, SlopLLM } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 
 HavokPhysics().then((hp) => {
@@ -403,8 +402,6 @@ HavokPhysics().then((hp) => {
   promptPanel.paddingLeftInPixels = 10;
   debugGui.addControl(promptPanel);
 
-  const slopTool = new SlopTool(scene);
-
   const localStorageUsePrompt = localStorage.getItem("usePrompt") === "true";
   async function initPrompt() {
     const promptStateTextBlock = new TextBlock("promptState", "Initializing prompt...");
@@ -429,6 +426,9 @@ HavokPhysics().then((hp) => {
       debugGui.update();
       return;
     }
+    const slopTool = new SlopTool(scene);
+    const slopLLM = new SlopLLM(slopTool);
+    slopLLM.configMLC(engine, MODEL, 4096);
     promptStateTextBlock.isVisible = false;
     const promptInputText = new InputText("promptInput", "");
     promptInputText.placeholderText = "Type your prompt here";
@@ -438,162 +438,24 @@ HavokPhysics().then((hp) => {
     promptInputText.heightInPixels = 32;
     promptInputText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     promptInputText.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-    const use8BModel = false;
     promptInputText.onEnterPressedObservable.add(async () => {
-      const llmRequest: ChatCompletionRequest = {
-        messages: [
-          use8BModel
-            ? {
-                role: "system",
-                content: `Cutting Knowledge Date: December 2023
-Today Date: 03 June 2025
-# Tool Instructions
-You have access to the following functions:
-{
-  "type": "function",
-  "function": {
-    "name": "add_box",
-    "description": "Add a new box to a 3D space.",
-    "parameters": {
-      "type": "object",
-      "pos_x": {
-        "type": "decimal",
-        "description": "X coordinate of the new box in the 3D space."
-      },
-      "pos_x": {
-        "type": "decimal",
-        "description": "Y coordinate of the new box in the 3D space."
-      },
-      "pos_z": {
-        "type": "decimal",
-        "description": "Z coordinate of the new box in the 3D space."
-      },
-      "size_x": {
-        "type": "decimal",
-        "description": "The new box's size along the x-axis."
-      },
-      "size_y": {
-        "type": "decimal",
-        "description": "The new box's size along the y-axis."
-      },
-      "size_z": {
-        "type": "decimal",
-        "description": "The new box's size along the z-axis."
-      },
-      "hex_color": {
-        "type": "string",
-        "description": "The box's color. For example '#00FF00' for green."
-      },
-      "required": ["pos_x", "pos_y", "pos_z", "size_x", "size_y", "size_z", "hex_color"]
-    }
-  }
-}
-If a you choose to call a function ONLY reply in the following format:
-    <function>{"name": function name, "parameters": dictionary of argument name and its value}</function>
-Here is an example,
-    <function>{"name": "example_function_name", "parameters": {"example_name": "example_value"}}</function>
-Reminder:
-- Function calls MUST follow the specified format and use BOTH <function> and </function>
-- Required parameters MUST be specified
-- Only call one function at a time
-- When calling a function, do NOT add any other words, ONLY the function calling
-- Put the entire function call reply on one line
-- Always add your sources when using search results to answer the user query
-You are a helpful Assistant.`,
-              }
-            : {
-                role: "system",
-                content: `Cutting Knowledge Date: December 2023
-Today Date: 03 June 2025
-# Tool Instructions
-You have access to the following functions:
-{
-  "type": "function",
-  "function": {
-    "name": "add_box",
-    "description": "Add a new box to a 3D space.",
-    "parameters": {
-      "type": "object",
-      "pos_x": {
-        "type": "decimal",
-        "description": "X coordinate of the new box in the 3D space."
-      },
-      "pos_x": {
-        "type": "decimal",
-        "description": "Y coordinate of the new box in the 3D space."
-      },
-      "pos_z": {
-        "type": "decimal",
-        "description": "Z coordinate of the new box in the 3D space."
-      },
-      "size_x": {
-        "type": "decimal",
-        "description": "The new box's size along the x-axis."
-      },
-      "size_y": {
-        "type": "decimal",
-        "description": "The new box's size along the y-axis."
-      },
-      "size_z": {
-        "type": "decimal",
-        "description": "The new box's size along the z-axis."
-      },
-      "hex_color": {
-        "type": "string",
-        "description": "The box's color. For example '#00FF00' for green."
-      },
-      "required": ["pos_x", "pos_y", "pos_z", "size_x", "size_y", "size_z", "hex_color"]
-    }
-  }
-}
-If a you choose to call a function ONLY reply in the following format:
-    \`\`\`{"name": function name, "parameters": dictionary of argument name and its value}\`\`\`
-Here is an example,
-    \`\`\`{"name": "example_function_name", "parameters": {"example_name": "example_value"}}\`\`\`
-Reminder:
-- Function calls MUST follow the specified format and use \`\`\`
-- Required parameters MUST be specified
-- Only call one function at a time
-- When calling a function, do NOT add any other words, ONLY the function calling
-- Put the entire function call reply on one line
-- Always add your sources when using search results to answer the user query
-You are a helpful Assistant.`,
-              },
-          {
-            role: "user",
-            content: promptInputText.text,
-          },
-        ],
-        max_tokens: 4096,
-      };
+      const promptUserMessage = promptInputText.text;
       promptInputText.text = "";
       promptInputText.isVisible = false;
-      promptStateTextBlock.text = "Thinking... (this may take couple of minutes and your GPU will spike)";
-      promptStateTextBlock.isVisible = true;
-      debugGui.update();
       try {
-        const reply = await engine.chat.completions.create(llmRequest);
-        console.log("reply choices:");
-        console.log(reply.choices);
-        let functionCallJsons = reply.choices.map((c) => c.message?.content ?? undefined);
-        if (use8BModel) {
-          functionCallJsons = functionCallJsons
-            .filter((c) => c?.startsWith("<function>") && c?.endsWith("</function>"))
-            .map((c) => c?.replace("<function>", "")?.replace("</function>", ""));
-        } else {
-          functionCallJsons = functionCallJsons.filter((c) => c?.startsWith("```")).map((c) => c?.replace(new RegExp("```", "g"), ""));
-        }
-        const functionCallObjs = functionCallJsons.map((j) => JSON.parse(j!));
-        for (const obj of functionCallObjs) {
-          slopTool.createBox(
-            obj.parameters.size_x,
-            obj.parameters.size_y,
-            obj.parameters.size_z,
-            obj.parameters.pos_x,
-            obj.parameters.pos_y,
-            obj.parameters.pos_z,
-            obj.parameters.hex_color
-          );
+        const trueOrMessage = await slopLLM.promptMlcTrueOrMessage(promptUserMessage, (progress) => {
+          if (progress.kind === "InvokingChatCompletionsCreate") {
+            promptStateTextBlock.text = `${
+              progress.attempt > 1 ? `ATTEMPT ${progress.attempt}: ` : ""
+            }Thinking... (this may take couple of minutes and your GPU will spike)`;
+            promptStateTextBlock.isVisible = true;
+            debugGui.update();
+          }
+        });
+
+        if (trueOrMessage !== true) {
+          console.error(`SLOP: inference failed: ${trueOrMessage}`);
+          return;
         }
       } catch (error) {
         console.error("SLOP: inference failed");
