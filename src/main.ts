@@ -24,11 +24,11 @@ import {
   UniversalCamera,
   Vector3,
 } from "@babylonjs/core";
-import { AdvancedDynamicTexture, Button, Checkbox, Control, InputText, StackPanel, TextBlock } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Button, Checkbox, Control, Grid, InputText, RadioButton, Rectangle, StackPanel, TextBlock } from "@babylonjs/gui";
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
-import { createMLCEngineOrFalse, MODEL, SlopLLM } from "./slop-llm";
+import { createMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 
 HavokPhysics().then((hp) => {
@@ -80,6 +80,7 @@ HavokPhysics().then((hp) => {
   let characterCanJump = false;
   let characterOnJumpablePlatform = false;
   let characterMsSinceJump = 0;
+  let characterDisableWasd = false;
   const characterMinMsBetweenJumps = 500;
   const characterStepImpulseSize = 1.2;
   const characterShpCtr = new PhysicsShapeContainer(scene);
@@ -395,31 +396,156 @@ HavokPhysics().then((hp) => {
 
   const promptPanel = new StackPanel();
   promptPanel.widthInPixels = debugPanelWidth;
-  promptPanel.isVertical = true;
+  promptPanel.isVertical = false;
+  promptPanel.height = ".3";
   promptPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   promptPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-  promptPanel.paddingBottomInPixels = 10;
-  promptPanel.paddingLeftInPixels = 10;
   debugGui.addControl(promptPanel);
 
-  const localStorageUsePrompt = localStorage.getItem("usePrompt") === "true";
+  const localStorageSelectedModel = localStorage.getItem("selectedModel");
+  const defaultModel: SlopLLMMLCModel = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+  let selectedModel: SlopLLMMLCModel = defaultModel;
+  if (SLOP_LLM_MLCMODELS.includes(localStorageSelectedModel as any)) {
+    selectedModel = localStorageSelectedModel as any;
+  }
   async function initPrompt() {
+    const promptModalButton = Button.CreateSimpleButton("promptModal", "⚙️");
+    promptModalButton.widthInPixels = 33 + 10;
+    promptModalButton.heightInPixels = 33 + 10;
+    promptModalButton.paddingLeftInPixels = 10;
+    promptModalButton.paddingBottomInPixels = 10;
+    promptModalButton.color = "white";
+    promptModalButton.cornerRadius = 10;
+    promptModalButton.background = "black";
+    promptModalButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    promptModalButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    promptModalButton.onPointerClickObservable.add(async () => {
+      characterDisableWasd = true;
+      const promptModalOverlayGui = AdvancedDynamicTexture.CreateFullscreenUI("promptModalOverlay", true, scene);
+      const promptModalOverlayGrid = new Grid("promptModalOverlay").addRowDefinition(1).addColumnDefinition(1);
+      promptModalOverlayGrid.background = "rgba(0, 0, 0, 0.5)";
+      promptModalOverlayGrid.isPointerBlocker = true;
+      promptModalOverlayGui.addControl(promptModalOverlayGrid);
+      const escapeObs = scene.onKeyboardObservable.add((ev) => {
+        if (ev.type === KeyboardEventTypes.KEYDOWN && ev.event.key === "Escape") {
+          promptModalOverlayGui.dispose();
+        }
+      });
+      promptModalOverlayGrid.onDisposeObservable.addOnce(() => {
+        characterDisableWasd = false;
+        escapeObs.remove();
+      });
+      promptModalOverlayGui.addControl(promptModalOverlayGrid);
+      const promptModalRectancle = new Rectangle("promptModal");
+      promptModalRectancle.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+      promptModalRectancle.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+      promptModalRectancle.widthInPixels = 640;
+      promptModalRectancle.heightInPixels = 480;
+      promptModalRectancle.background = "rgba(0, 0, 0, 0.5)";
+      promptModalOverlayGrid.addControl(promptModalRectancle, 0, 0);
+      const promptModalTitleTextBlock = new TextBlock("promptModalTitle", "PROMPT SETTINGS");
+      promptModalTitleTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+      promptModalTitleTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+      promptModalTitleTextBlock.color = "white";
+      promptModalTitleTextBlock.paddingTopInPixels = 16;
+      promptModalTitleTextBlock.paddingLeftInPixels = 16;
+      promptModalRectancle.addControl(promptModalTitleTextBlock);
+      const promptModalCloseButton = Button.CreateSimpleButton("promptModalCloseButton", "❌");
+      promptModalCloseButton.widthInPixels = 43;
+      promptModalCloseButton.heightInPixels = 43;
+      promptModalCloseButton.thickness = 0;
+      promptModalCloseButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+      promptModalCloseButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+      promptModalCloseButton.onPointerClickObservable.addOnce(() => {
+        promptModalOverlayGui.dispose();
+      });
+      promptModalRectancle.addControl(promptModalCloseButton);
+      let promptModalFormWidth = 300 + 300;
+      let promptModalFormHeight = 43 * SLOP_LLM_MLCMODELS.length;
+      const promptModalFormGrid = new Grid("promptModalForm")
+        .addColumnDefinition(300, true)
+        .addColumnDefinition(300, true)
+        .addRowDefinition(43 * SLOP_LLM_MLCMODELS.length, true);
+      promptModalFormGrid.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+      promptModalFormGrid.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+      promptModalFormGrid.widthInPixels = promptModalFormWidth;
+      promptModalFormGrid.heightInPixels = promptModalFormHeight;
+      promptModalRectancle.addControl(promptModalFormGrid);
+      const promptModalSelectModelTextBlock = new TextBlock("promptModalSelectModel", "language model:");
+      promptModalSelectModelTextBlock.color = "white";
+      promptModalSelectModelTextBlock.paddingTopInPixels = 3;
+      promptModalSelectModelTextBlock.paddingRightInPixels = 10;
+      promptModalSelectModelTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+      promptModalSelectModelTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+      promptModalFormGrid.addControl(promptModalSelectModelTextBlock, 0, 0);
+      const promptModalSelectModelStackPanel = new StackPanel("selectModel");
+      promptModalSelectModelStackPanel.isVertical = true;
+      promptModalSelectModelStackPanel.width = 1;
+      promptModalSelectModelStackPanel.height = 1;
+      promptModalFormGrid.addControl(promptModalSelectModelStackPanel, 0, 1);
+      let formSelectedModel = selectedModel;
+      for (const [mlcModel, ix] of SLOP_LLM_MLCMODELS.map((x, ix) => [x, ix] as const)) {
+        const promptModalSelectModelRadioButton = new RadioButton(`selectModel${ix}`);
+        promptModalSelectModelRadioButton.widthInPixels = 20;
+        promptModalSelectModelRadioButton.heightInPixels = 20;
+        promptModalSelectModelRadioButton.color = "black";
+        promptModalSelectModelRadioButton.background = "white";
+        promptModalSelectModelRadioButton.group = "selectModel";
+        promptModalSelectModelRadioButton.isChecked = mlcModel === formSelectedModel;
+        promptModalSelectModelRadioButton.onIsCheckedChangedObservable.add((v) => {
+          if (v) {
+            formSelectedModel = mlcModel;
+          }
+        });
+        const promptModalSelectModelRadioButtonHeader = Control.AddHeader(promptModalSelectModelRadioButton, mlcModel, "270px", {
+          isHorizontal: true,
+          controlFirst: true,
+        }) as StackPanel;
+        promptModalSelectModelRadioButtonHeader.color = "white";
+        promptModalSelectModelRadioButtonHeader.heightInPixels = 30;
+        promptModalSelectModelRadioButtonHeader.fontSize = 16;
+        promptModalSelectModelRadioButtonHeader.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+        promptModalSelectModelStackPanel.addControl(promptModalSelectModelRadioButtonHeader);
+      }
+      const promptModalSaveButton = Button.CreateSimpleButton("promptModalSaveButton", "Save");
+      promptModalSaveButton.widthInPixels = 100;
+      promptModalSaveButton.heightInPixels = 43 + 16;
+      promptModalSaveButton.paddingBottomInPixels = 16;
+      promptModalSaveButton.cornerRadius = 10;
+      promptModalSaveButton.color = "white";
+      promptModalSaveButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+      promptModalSaveButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+      promptModalSaveButton.onPointerClickObservable.addOnce(() => {
+        promptModalOverlayGui.dispose();
+        if (formSelectedModel !== selectedModel) {
+          localStorage.setItem("selectedModel", formSelectedModel);
+          location.reload();
+        }
+      });
+      promptModalRectancle.addControl(promptModalSaveButton);
+    });
+    promptPanel.addControl(promptModalButton);
     const promptStateTextBlock = new TextBlock("promptState", "Initializing prompt...");
-    promptStateTextBlock.heightInPixels = 60;
+    promptStateTextBlock.widthInPixels = debugPanelWidth;
+    promptStateTextBlock.heightInPixels = 60 + 10;
+    promptStateTextBlock.paddingLeftInPixels = 10;
+    promptStateTextBlock.paddingBottomInPixels = 15;
     promptStateTextBlock.color = "white";
     promptStateTextBlock.fontSize = 20;
+    promptStateTextBlock.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    promptStateTextBlock.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptStateTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     promptStateTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptStateTextBlock.textWrapping = true;
     promptPanel.addControl(promptStateTextBlock);
-    const engine = await createMLCEngineOrFalse((p) => {
+    const engine = await createMLCEngineOrFalse(selectedModel, (p) => {
       const percentage = Math.round(p.progress * 100);
       if (percentage === 0) {
-        promptStateTextBlock.text = `Ensuring ${MODEL}...`;
+        promptStateTextBlock.text = `Ensuring ${selectedModel}...`;
       } else if (p.text.includes("Fetching param cache")) {
-        promptStateTextBlock.text = `Downloading ${MODEL}... ${percentage}%`;
+        promptStateTextBlock.text = `Downloading ${selectedModel}... ${percentage}%`;
       } else {
-        promptStateTextBlock.text = `Preparing ${MODEL}... ${percentage}%`;
+        promptStateTextBlock.text = `Preparing ${selectedModel}... ${percentage}%`;
       }
       debugGui.update();
     });
@@ -430,20 +556,23 @@ HavokPhysics().then((hp) => {
     }
     const slopTool = new SlopTool(scene);
     const slopLLM = new SlopLLM(slopTool);
-    slopLLM.configMLC(engine, MODEL, 4096);
+    slopLLM.configMLC(engine, selectedModel, 4096);
     promptStateTextBlock.isVisible = false;
     const promptInputText = new InputText("promptInput", "");
     promptInputText.placeholderText = "Type your prompt here";
     promptInputText.placeholderColor = "gray";
     promptInputText.color = "white";
     promptInputText.widthInPixels = 512;
-    promptInputText.heightInPixels = 32;
+    promptInputText.heightInPixels = 32 + 10;
+    promptInputText.paddingLeftInPixels = 10;
+    promptInputText.paddingBottomInPixels = 10;
     promptInputText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     promptInputText.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptInputText.onEnterPressedObservable.add(async () => {
       const promptUserMessage = promptInputText.text;
       promptInputText.text = "";
       promptInputText.isVisible = false;
+      promptModalButton.isVisible = false;
       try {
         const trueOrMessage = await slopLLM.promptMlcTrueOrMessage(promptUserMessage, (progress) => {
           if (progress.kind === "InvokingChatCompletionsCreate") {
@@ -465,6 +594,7 @@ HavokPhysics().then((hp) => {
         return;
       } finally {
         promptInputText.isVisible = true;
+        promptModalButton.isVisible = true;
         promptStateTextBlock.isVisible = false;
         debugGui.update();
       }
@@ -472,12 +602,14 @@ HavokPhysics().then((hp) => {
     promptPanel.addControl(promptInputText);
     debugGui.update();
   }
-  if (localStorageUsePrompt) {
+  if (localStorageSelectedModel) {
     scene.onAfterRenderObservable.addOnce(async () => await initPrompt());
   } else {
     const promptUsePromptButton = Button.CreateSimpleButton("usePrompt", "Use prompt");
-    promptUsePromptButton.widthInPixels = 150;
-    promptUsePromptButton.heightInPixels = 40;
+    promptUsePromptButton.widthInPixels = 150 + 10;
+    promptUsePromptButton.heightInPixels = 40 + 10;
+    promptUsePromptButton.paddingBottomInPixels = 10;
+    promptUsePromptButton.paddingLeftInPixels = 10;
     promptUsePromptButton.color = "white";
     promptUsePromptButton.cornerRadius = 10;
     promptUsePromptButton.background = "black";
@@ -485,7 +617,7 @@ HavokPhysics().then((hp) => {
     promptUsePromptButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptUsePromptButton.onPointerClickObservable.addOnce(async () => {
       promptUsePromptButton.dispose();
-      localStorage.setItem("usePrompt", "true");
+      localStorage.setItem("selectedModel", defaultModel);
       await initPrompt();
     });
     promptPanel.addControl(promptUsePromptButton);
@@ -653,6 +785,10 @@ HavokPhysics().then((hp) => {
   });
 
   scene.onKeyboardObservable.add((k) => {
+    if (characterDisableWasd) {
+      return;
+    }
+
     switch (k.type) {
       case KeyboardEventTypes.KEYDOWN:
         switch (k.event.key) {

@@ -9,10 +9,10 @@ import {
 } from "@mlc-ai/web-llm";
 import { SlopTool } from "./slop-tool";
 
-export const MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
-// export const MODEL = "Hermes-3-Llama-3.1-8B-q4f16_1-MLC";
+export const SLOP_LLM_MLCMODELS = ["Llama-3.2-1B-Instruct-q4f16_1-MLC", "Llama-3.2-1B-Instruct-q4f32_1-MLC", "Hermes-3-Llama-3.1-8B-q4f16_1-MLC"] as const;
+export type SlopLLMMLCModel = (typeof SLOP_LLM_MLCMODELS)[number];
 
-export async function createMLCEngineOrFalse(onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
+export async function createMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
   let reg: ServiceWorkerRegistration;
   if ("serviceWorker" in navigator) {
     try {
@@ -50,7 +50,7 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
     let timeout: number;
     const timeoutPromise = new Promise<false>((res) => (timeout = setTimeout(() => res(false), 5000)));
     const engineOrFalse = await Promise.race([
-      CreateServiceWorkerMLCEngine(MODEL, {
+      CreateServiceWorkerMLCEngine(model, {
         initProgressCallback: (p) => {
           clearTimeout(timeout);
           onProgress(p);
@@ -60,7 +60,17 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
     ]);
 
     if (engineOrFalse === false) {
-      console.log("SLOP: could not get engine. Restarting...");
+      console.error("SLOP: mlc could not get engine. Restarting...");
+      await reg.unregister();
+      location.reload();
+      return (await new Promise(() => {})) as never;
+    }
+
+    try {
+      await engineOrFalse.runtimeStatsText(model);
+    } catch (error) {
+      console.log("SLOP: mlc could not get runtimeStatsText. Restarting...");
+      console.error(error);
       await reg.unregister();
       location.reload();
       return (await new Promise(() => {})) as never;
@@ -68,10 +78,10 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
 
     return engineOrFalse;
   } catch (error) {
-    console.error("SLOP: engine failed");
+    console.error("SLOP: mlc engine failed");
     console.error(error);
     if ((error as string).includes("There is no active service worker")) {
-      console.log("SLOP: there is no active service worker. Restarting...");
+      console.log("SLOP: mlc there is no active sw. Restarting...");
       await reg.unregister();
       location.reload();
       return (await new Promise(() => {})) as never;
@@ -80,9 +90,6 @@ export async function createMLCEngineOrFalse(onProgress: (progress: InitProgress
     return false;
   }
 }
-
-export const SLOP_LLM_MLCMODELS = ["Llama-3.2-1B-Instruct-q4f32_1-MLC", "Hermes-3-Llama-3.1-8B-q4f16_1-MLC"] as const;
-export type SlopLLMMLCModel = (typeof SLOP_LLM_MLCMODELS)[number];
 
 export class SlopLLM {
   config?: {
@@ -104,6 +111,7 @@ export class SlopLLM {
       case "Hermes-3-Llama-3.1-8B-q4f16_1-MLC":
         mlcSystemPrompt = createSystemPrompt(HERMES_3_LLAMA_3_1_8B_Q4F16_1_MLC_SYSTEMPROMPTTEMPLATE);
         break;
+      case "Llama-3.2-1B-Instruct-q4f16_1-MLC":
       case "Llama-3.2-1B-Instruct-q4f32_1-MLC":
         mlcSystemPrompt = createSystemPrompt(LLAMA_3_2_1B_INSTRUCT_Q4F32_1_MLC_SYSTEMPROMPTTEMPLATE);
         break;
@@ -132,8 +140,16 @@ export class SlopLLM {
       throw new Error("SLOP: mlc not configured");
     }
 
-    const maxAttempts =
-      this.config.mlcModel === "Hermes-3-Llama-3.1-8B-q4f16_1-MLC" ? 1 : this.config.mlcModel === "Llama-3.2-1B-Instruct-q4f32_1-MLC" ? 3 : (false as never);
+    let maxAttempts: number;
+    switch (this.config.mlcModel) {
+      case "Hermes-3-Llama-3.1-8B-q4f16_1-MLC":
+        maxAttempts = 1;
+        break;
+      case "Llama-3.2-1B-Instruct-q4f16_1-MLC":
+      case "Llama-3.2-1B-Instruct-q4f32_1-MLC":
+        maxAttempts = 3;
+        break;
+    }
     let attempt = 0;
     const followupMessages: ChatCompletionMessageParam[] = [];
     while (true) {
@@ -180,6 +196,7 @@ export class SlopLLM {
 
           break;
         }
+        case "Llama-3.2-1B-Instruct-q4f16_1-MLC":
         case "Llama-3.2-1B-Instruct-q4f32_1-MLC": {
           toolCallDatas = choices
             .filter((c) => c.finish_reason === "stop" && c.message?.content?.includes("```"))
