@@ -11,6 +11,10 @@ self.addEventListener("install", function () {
 });
 
 self.addEventListener("activate", function (e) {
-  e.waitUntil(self.clients.claim());
-  handler = new ServiceWorkerMLCEngineHandler();
+  e.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      handler = new ServiceWorkerMLCEngineHandler();
+    })()
+  );
 });

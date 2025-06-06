@@ -12,81 +12,82 @@ import { SlopTool } from "./slop-tool";
 export const SLOP_LLM_MLCMODELS = ["Llama-3.2-1B-Instruct-q4f16_1-MLC", "Llama-3.2-1B-Instruct-q4f32_1-MLC", "Hermes-3-Llama-3.1-8B-q4f16_1-MLC"] as const;
 export type SlopLLMMLCModel = (typeof SLOP_LLM_MLCMODELS)[number];
 
-export async function createMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
-  let reg: ServiceWorkerRegistration;
-  if ("serviceWorker" in navigator) {
-    try {
-      const regOrFalse = await Promise.race([navigator.serviceWorker.ready, new Promise<false>((res) => setTimeout(() => res(false), 3000))]);
-
-      if (regOrFalse === false) {
-        console.error("SLOP: sw did not get ready on time");
-        return false;
-      }
-
-      reg = regOrFalse;
-
-      if (!reg) {
-        console.error("SLOP: sw not found");
-        return false;
-      }
-
-      if (!reg.active) {
-        console.error("SLOP: sw not active");
-        return false;
-      }
-
-      await reg.update();
-    } catch (error) {
-      console.error("SLOP: sw failed");
-      console.error(error);
-      return false;
-    }
-  } else {
+export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
+  if (!("serviceWorker" in navigator)) {
     console.error("SLOP: sw not supported");
     return false;
   }
 
   try {
-    let timeout: number;
-    const timeoutPromise = new Promise<false>((res) => (timeout = setTimeout(() => res(false), 5000)));
-    const engineOrFalse = await Promise.race([
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, rej) => {
+        setTimeout(() => {
+          rej(new Error("Service Worker failed to activate (likely unsupported browser)"));
+        }, 10000);
+      }),
+    ]);
+
+    if (!registration.active) {
+      console.error("SLOP: sw not active");
+      return false;
+    }
+
+    await new Promise((resolve) => {
+      if (registration.active?.state === "activated") {
+        setTimeout(resolve, 200);
+      } else {
+        const checkActivation = () => {
+          if (registration.active?.state === "activated") {
+            setTimeout(resolve, 200);
+          } else {
+            setTimeout(checkActivation, 50);
+          }
+        };
+        checkActivation();
+      }
+    });
+
+    let engineCreationOk = false;
+    const engine = await Promise.race([
       CreateServiceWorkerMLCEngine(model, {
         initProgressCallback: (p) => {
-          clearTimeout(timeout);
+          engineCreationOk = true;
           onProgress(p);
         },
       }),
-      timeoutPromise,
+      new Promise<never>((_, rej) => {
+        setTimeout(() => {
+          if (!engineCreationOk) {
+            console.log("SLOP: No progress after 10s, unregistering SW and reloading...");
+            registration.unregister().then(() => {
+              location.reload();
+            });
+          }
+          rej(new Error("MLC engine creation timeout"));
+        }, 10000);
+      }),
     ]);
-
-    if (engineOrFalse === false) {
-      console.error("SLOP: mlc could not get engine. Restarting...");
-      await reg.unregister();
-      location.reload();
-      return (await new Promise(() => {})) as never;
-    }
+    engineCreationOk = true;
 
     try {
-      await engineOrFalse.runtimeStatsText(model);
+      await engine.runtimeStatsText(model);
     } catch (error) {
-      console.log("SLOP: mlc could not get runtimeStatsText. Restarting...");
+      console.error("SLOP: model not loaded, reloading...");
       console.error(error);
-      await reg.unregister();
-      location.reload();
-      return (await new Promise(() => {})) as never;
+      await engine.unload();
+      await engine.reload(model);
+      await engine.runtimeStatsText(model);
     }
 
-    return engineOrFalse;
+    return engine;
   } catch (error) {
-    console.error("SLOP: mlc engine failed");
-    console.error(error);
-    if ((error as string).includes("There is no active service worker")) {
-      console.log("SLOP: mlc there is no active sw. Restarting...");
-      await reg.unregister();
-      location.reload();
-      return (await new Promise(() => {})) as never;
+    if ((((error as any).message ?? error) as string)?.includes("aborted")) {
+      console.error("SLOP: mlc download was aborted (likely due to model switch)");
+    } else {
+      console.error("SLOP: mlc engine failed");
     }
-
+    console.error(error);
     return false;
   }
 }

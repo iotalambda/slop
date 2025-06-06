@@ -28,7 +28,7 @@ import { AdvancedDynamicTexture, Button, Checkbox, Control, Grid, InputText, Rad
 import HavokPhysics from "@babylonjs/havok";
 import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
-import { createMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
+import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 
 HavokPhysics().then((hp) => {
@@ -409,6 +409,35 @@ HavokPhysics().then((hp) => {
     selectedModel = localStorageSelectedModel as any;
   }
   async function initPrompt() {
+    const slopTool = new SlopTool(scene);
+    const slopLLM = new SlopLLM(slopTool);
+    async function initSlopLLMWithMLCEngine() {
+      promptStateTextBlock.isVisible = true;
+      promptInputText.isVisible = false;
+      debugGui.update();
+      const engineOrFalse = await initMLCEngineOrFalse(selectedModel, (p) => {
+        const percentage = Math.round(p.progress * 100);
+        if (percentage === 0) {
+          promptStateTextBlock.text = `Ensuring ${selectedModel}...`;
+        } else if (p.text.includes("Fetching param cache")) {
+          promptStateTextBlock.text = `Downloading ${selectedModel}... ${percentage}%`;
+        } else {
+          promptStateTextBlock.text = `Preparing ${selectedModel}... ${percentage}%`;
+        }
+        debugGui.update();
+      });
+      if (engineOrFalse === false) {
+        promptStateTextBlock.text =
+          "Something went wrong. If you're using Firefox or similar, it did not yet support WebGPU in Service Workers as of June 2025.";
+        debugGui.update();
+        return false;
+      }
+      slopLLM.configMLC(engineOrFalse, selectedModel, 4096);
+      promptStateTextBlock.isVisible = false;
+      promptInputText.isVisible = true;
+      debugGui.update();
+      return true;
+    }
     const promptModalButton = Button.CreateSimpleButton("promptModal", "⚙️");
     promptModalButton.widthInPixels = 33 + 10;
     promptModalButton.heightInPixels = 33 + 10;
@@ -515,18 +544,19 @@ HavokPhysics().then((hp) => {
       promptModalSaveButton.color = "white";
       promptModalSaveButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
       promptModalSaveButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-      promptModalSaveButton.onPointerClickObservable.addOnce(() => {
+      promptModalSaveButton.onPointerClickObservable.addOnce(async () => {
         promptModalOverlayGui.dispose();
         if (formSelectedModel !== selectedModel) {
+          selectedModel = formSelectedModel;
           localStorage.setItem("selectedModel", formSelectedModel);
-          location.reload();
+          await initSlopLLMWithMLCEngine();
         }
       });
       promptModalRectancle.addControl(promptModalSaveButton);
     });
     promptPanel.addControl(promptModalButton);
     const promptStateTextBlock = new TextBlock("promptState", "Initializing prompt...");
-    promptStateTextBlock.widthInPixels = debugPanelWidth;
+    promptStateTextBlock.widthInPixels = debugPanelWidth - 33;
     promptStateTextBlock.heightInPixels = 60 + 10;
     promptStateTextBlock.paddingLeftInPixels = 10;
     promptStateTextBlock.paddingBottomInPixels = 15;
@@ -538,26 +568,6 @@ HavokPhysics().then((hp) => {
     promptStateTextBlock.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptStateTextBlock.textWrapping = true;
     promptPanel.addControl(promptStateTextBlock);
-    const engine = await createMLCEngineOrFalse(selectedModel, (p) => {
-      const percentage = Math.round(p.progress * 100);
-      if (percentage === 0) {
-        promptStateTextBlock.text = `Ensuring ${selectedModel}...`;
-      } else if (p.text.includes("Fetching param cache")) {
-        promptStateTextBlock.text = `Downloading ${selectedModel}... ${percentage}%`;
-      } else {
-        promptStateTextBlock.text = `Preparing ${selectedModel}... ${percentage}%`;
-      }
-      debugGui.update();
-    });
-    if (engine === false) {
-      promptStateTextBlock.text = "Something went wrong. If you're using Firefox or similar, it did not yet support WebGPU in Service Workers as of June 2025.";
-      debugGui.update();
-      return;
-    }
-    const slopTool = new SlopTool(scene);
-    const slopLLM = new SlopLLM(slopTool);
-    slopLLM.configMLC(engine, selectedModel, 4096);
-    promptStateTextBlock.isVisible = false;
     const promptInputText = new InputText("promptInput", "");
     promptInputText.placeholderText = "Type your prompt here";
     promptInputText.placeholderColor = "gray";
@@ -600,6 +610,10 @@ HavokPhysics().then((hp) => {
       }
     });
     promptPanel.addControl(promptInputText);
+    const mlcEngineOk = await initSlopLLMWithMLCEngine();
+    if (!mlcEngineOk) {
+      return;
+    }
     debugGui.update();
   }
   if (localStorageSelectedModel) {
