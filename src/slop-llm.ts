@@ -63,8 +63,8 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
             registration.unregister().then(() => {
               location.reload();
             });
+            rej(new Error("MLC engine creation timeout"));
           }
-          rej(new Error("MLC engine creation timeout"));
         }, 10000);
       }),
     ]);
