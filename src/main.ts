@@ -118,10 +118,11 @@ HavokPhysics().then((hp) => {
     if (camera?.isDisposed() === false) {
       camera.dispose();
     }
-    const c = new UniversalCamera("cam", new Vector3(0, 30, -10), scene);
-    c.rotation.y = characterOrientationQuaternion.toEulerAngles().y;
+    const c = new UniversalCamera("cam", Vector3.Zero(), scene);
+    c.rotation.y = characterOrientationQuaternion.toEulerAngles().y - character.rotation.y;
     c.attachControl();
     c.minZ = 0;
+    c.parent = character;
     camera = c;
   }
   function replaceWithArcRotateCamera() {
@@ -657,8 +658,6 @@ HavokPhysics().then((hp) => {
   let gettingUpFinalize = false;
   let standsOnAnimated = false;
   scene.onBeforeRenderObservable.add((scene) => {
-    camera.position.copyFrom(character.position);
-
     characterFeet.position.x = character.position.x;
     characterFeet.position.y = character.position.y + characterFeetY;
     characterFeet.position.z = character.position.z;
@@ -667,12 +666,12 @@ HavokPhysics().then((hp) => {
     let cameraYaw: number;
     const characterRotationPrevY = characterRotation.y;
     character.rotationQuaternion?.toEulerAnglesToRef(characterRotation);
+
     if (camera instanceof UniversalCamera) {
-      camera.rotation.y -= characterRotationPrevY - character.rotation.y;
-      cameraPitch = camera.rotation.x;
-      cameraYaw = camera.rotation.y;
-      camera.upVector = character.up;
+      cameraPitch = camera.rotation.x + character.rotation.x;
+      cameraYaw = camera.rotation.y + character.rotation.y;
     } else if (camera instanceof ArcRotateCamera) {
+      camera.position.copyFrom(character.position);
       camera.alpha += characterRotationPrevY - character.rotation.y;
       cameraPitch = -camera.beta + Math.PI / 2;
       cameraYaw = -camera.alpha - Math.PI / 2;
@@ -727,8 +726,8 @@ HavokPhysics().then((hp) => {
       quaternionZeroReadonly
     );
 
-    platform3Acc += (platform3Clockwise ? 1 : -1) * 0.002;
-    if (platform3Acc > 0.2 || platform3Acc < -0.2) {
+    platform3Acc += (platform3Clockwise ? 1 : -1) * 0.0002;
+    if (platform3Acc > 0.1 || platform3Acc < -0.1) {
       platform3Clockwise = !platform3Clockwise;
     }
     platform3Agg.transformNode.addRotation(0, platform3Acc, 0);
