@@ -31,30 +31,10 @@ import { GridMaterial } from "@babylonjs/materials";
 import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 import appInsights from "./telemetry";
-import { SeverityLevel } from "@microsoft/applicationinsights-web";
 
 // NOTE: Don't add top-level awaits for compatibility.
 
-HavokPhysics().then(async (hp) => {
-  if (navigator.gpu) {
-    const adapter = await navigator.gpu.requestAdapter();
-    if (adapter) {
-      const device = await adapter.requestDevice();
-      device.addEventListener("uncapturederror", (event) => {
-        console.error("SLOP: WebGPU uncaptured error");
-        const error = (event as any).error ?? { info: "event.error is not set" };
-        console.error(error);
-        appInsights.trackTrace({ message: "WebGPU uncaptured error", severityLevel: SeverityLevel.Warning }, error);
-      });
-    } else {
-      appInsights.trackTrace({ message: "Failed to get GPU adapter", severityLevel: SeverityLevel.Error });
-      console.error("Failed to get GPU adapter.");
-    }
-  } else {
-    appInsights.trackTrace({ message: "WebGPU is not supported in this browser", severityLevel: SeverityLevel.Error });
-    console.error("WebGPU is not supported in this browser.");
-  }
-
+HavokPhysics().then((hp) => {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
   const hkTimeStep = 1 / 30;
   const engine = new Engine(canvas, true, { deterministicLockstep: true, lockstepMaxSteps: 9999 });

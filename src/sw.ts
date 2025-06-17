@@ -15,6 +15,24 @@ self.addEventListener("activate", function (e) {
     (async () => {
       await self.clients.claim();
       handler = new ServiceWorkerMLCEngineHandler();
+
+      if (navigator.gpu) {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (adapter) {
+          const device = await adapter.requestDevice();
+          device.addEventListener("uncapturederror", async (event) => {
+            console.error("SLOP: WebGPU uncaptured error");
+            const error = (event as any).error ?? { info: "event.error is not set" };
+            console.error(error);
+            for (const client of await self.clients.matchAll()) {
+              client.postMessage({
+                ...error,
+                type: "sloperror",
+              });
+            }
+          });
+        }
+      }
     })()
   );
 });

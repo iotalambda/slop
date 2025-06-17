@@ -24,15 +24,21 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
   }
 
   try {
+    let registrationOk = false;
     const registration = await Promise.race([
       navigator.serviceWorker.ready,
-      new Promise<never>((_, rej) => {
+      new Promise<never>((res, rej) => {
         setTimeout(() => {
-          appInsights.trackTrace({ message: "sw failed to activate (likely unsupported browser)", severityLevel: SeverityLevel.Error });
-          rej(new Error("sw failed to activate (likely unsupported browser)"));
+          if (!registrationOk) {
+            appInsights.trackTrace({ message: "sw failed to activate (likely unsupported browser)", severityLevel: SeverityLevel.Error });
+            rej(new Error("sw failed to activate (likely unsupported browser)"));
+          } else {
+            res(false as never);
+          }
         }, 10000);
       }),
     ]);
+    registrationOk = true;
 
     if (!registration.active) {
       appInsights.trackTrace({ message: "sw not active", severityLevel: SeverityLevel.Error });
@@ -55,20 +61,20 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
       }
     });
 
-    let engineCreationOk = false;
+    let engineOk = false;
     const engine = await Promise.race([
       CreateServiceWorkerMLCEngine(model, {
         initProgressCallback: (p) => {
-          if (!engineCreationOk) {
-            appInsights.trackTrace({ message: "engineCreationOk", severityLevel: SeverityLevel.Information });
-            engineCreationOk = true;
+          if (!engineOk) {
+            appInsights.trackTrace({ message: "initProgressCallback", severityLevel: SeverityLevel.Information });
+            engineOk = true;
           }
           onProgress(p);
         },
       }),
-      new Promise<never>((_, rej) => {
+      new Promise<never>((res, rej) => {
         setTimeout(() => {
-          if (!engineCreationOk) {
+          if (!engineOk) {
             appInsights.trackTrace({ message: "No progress after 10s, unregistering SW and reloading...", severityLevel: SeverityLevel.Warning });
             console.log("SLOP: No progress after 10s, unregistering SW and reloading...");
             setTimeout(() => {
@@ -78,11 +84,13 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
             registration.unregister().then(() => {
               location.reload();
             });
+          } else {
+            res(undefined as never);
           }
         }, 10000);
       }),
     ]);
-    engineCreationOk = true;
+    engineOk = true;
 
     try {
       const runtimeStatsText = await engine.runtimeStatsText(model);
@@ -96,6 +104,14 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
       const runtimeStatsText2 = await engine.runtimeStatsText(model);
       appInsights.trackTrace({ message: "runtimeStatsText2", severityLevel: SeverityLevel.Information }, { value: runtimeStatsText2 });
     }
+
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "sloperror") {
+        console.error("SLOP: error from sw to window.");
+        console.error(event.data.message ?? "no message");
+        appInsights.trackTrace({ message: "sw error", severityLevel: SeverityLevel.Error }, ...event.data);
+      }
+    });
 
     return engine;
   } catch (error) {
