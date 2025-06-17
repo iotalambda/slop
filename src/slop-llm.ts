@@ -32,8 +32,6 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
           if (!registrationOk) {
             appInsights.trackTrace({ message: "sw failed to activate (likely unsupported browser)", severityLevel: SeverityLevel.Error });
             rej(new Error("sw failed to activate (likely unsupported browser)"));
-          } else {
-            res(false as never);
           }
         }, 10000);
       }),
@@ -84,8 +82,6 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
             registration.unregister().then(() => {
               location.reload();
             });
-          } else {
-            res(undefined as never);
           }
         }, 10000);
       }),
