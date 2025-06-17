@@ -308,6 +308,15 @@ HavokPhysics().then((hp) => {
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
+  const versionTextBlock = new TextBlock("versionTextBlock", "version 2");
+  versionTextBlock.heightInPixels = 30;
+  versionTextBlock.color = "white";
+  versionTextBlock.fontSize = 20;
+  versionTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  versionTextBlock.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+  versionTextBlock.setPaddingInPixels(5);
+  debugGui.addControl(versionTextBlock);
+
   const debugPanelWidth = 640;
   const debugPanelCheckBoxWidth = 20;
   const debugPanelTextWidth = debugPanelWidth - debugPanelCheckBoxWidth;
