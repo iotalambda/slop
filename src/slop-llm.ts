@@ -60,10 +60,12 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
         setTimeout(() => {
           if (!engineCreationOk) {
             console.log("SLOP: No progress after 10s, unregistering SW and reloading...");
+            setTimeout(() => {
+              rej(new Error("MLC engine creation timeout"));
+            }, 5000);
             registration.unregister().then(() => {
               location.reload();
             });
-            rej(new Error("MLC engine creation timeout"));
           }
         }, 10000);
       }),
