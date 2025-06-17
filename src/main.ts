@@ -332,7 +332,7 @@ HavokPhysics().then((hp) => {
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
-  const versionTextBlock = new TextBlock("versionTextBlock", "version 2");
+  const versionTextBlock = new TextBlock("versionTextBlock", "version 3");
   versionTextBlock.heightInPixels = 30;
   versionTextBlock.color = "white";
   versionTextBlock.fontSize = 20;
