@@ -30,8 +30,31 @@ import { Inspector } from "@babylonjs/inspector";
 import { GridMaterial } from "@babylonjs/materials";
 import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
+import appInsights from "./telemetry";
+import { SeverityLevel } from "@microsoft/applicationinsights-web";
 
-HavokPhysics().then((hp) => {
+// NOTE: Don't add top-level awaits for compatibility.
+
+HavokPhysics().then(async (hp) => {
+  if (navigator.gpu) {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (adapter) {
+      const device = await adapter.requestDevice();
+      device.addEventListener("uncapturederror", (event) => {
+        console.error("SLOP: WebGPU uncaptured error");
+        const error = (event as any).error ?? { info: "event.error is not set" };
+        console.error(error);
+        appInsights.trackTrace({ message: "WebGPU uncaptured error", severityLevel: SeverityLevel.Warning }, error);
+      });
+    } else {
+      appInsights.trackTrace({ message: "Failed to get GPU adapter", severityLevel: SeverityLevel.Error });
+      console.error("Failed to get GPU adapter.");
+    }
+  } else {
+    appInsights.trackTrace({ message: "WebGPU is not supported in this browser", severityLevel: SeverityLevel.Error });
+    console.error("WebGPU is not supported in this browser.");
+  }
+
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
   const hkTimeStep = 1 / 30;
   const engine = new Engine(canvas, true, { deterministicLockstep: true, lockstepMaxSteps: 9999 });
@@ -40,6 +63,27 @@ HavokPhysics().then((hp) => {
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
   hk.setTimeStep(hkTimeStep);
   const physicsViewer = new PhysicsViewer(scene);
+
+  appInsights.trackEvent(
+    { name: "pageLoaded" },
+    {
+      engineCaps: engine.getCaps(),
+      engineGlInfo: engine.getGlInfo(),
+      engineWebGlVersion: engine.webGLVersion,
+      engineIsWebGPU: engine.isWebGPU,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      languages: navigator.languages,
+      screen: {
+        width: screen.width,
+        height: screen.height,
+        pixelDepth: screen.pixelDepth,
+      },
+      deviceMemory: (navigator as any).deviceMemory,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      webGpuSupported: !!navigator.gpu,
+    }
+  );
 
   const light = new HemisphericLight("light", new Vector3(3, 10, 0), scene);
   light.intensity = 0.5;
@@ -342,6 +386,7 @@ HavokPhysics().then((hp) => {
   debugToggleCameraCheckbox.widthInPixels = debugPanelCheckBoxWidth;
   debugToggleCameraCheckbox.heightInPixels = 20;
   debugToggleCameraCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
+    appInsights.trackEvent({ name: "debugToggleCameraCheckboxClicked" }, { value: v });
     ev.skipNextObservers = true;
     if (v) {
       character.isVisible = true;
@@ -377,6 +422,7 @@ HavokPhysics().then((hp) => {
   debugToggleXYZIndicatorCheckbox.widthInPixels = debugPanelCheckBoxWidth;
   debugToggleXYZIndicatorCheckbox.heightInPixels = 20;
   debugToggleXYZIndicatorCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
+    appInsights.trackEvent({ name: "debugToggleXYZIndicatorCheckboxClicked" }, { value: v });
     ev.skipNextObservers = true;
     xyzIndicator.setEnabled(v);
   });
@@ -459,6 +505,7 @@ HavokPhysics().then((hp) => {
     promptModalButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     promptModalButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptModalButton.onPointerClickObservable.add(async () => {
+      appInsights.trackEvent({ name: "promptModalButtonClicked" });
       characterDisableWasd = true;
       const promptModalOverlayGui = AdvancedDynamicTexture.CreateFullscreenUI("promptModalOverlay", true, scene);
       const promptModalOverlayGrid = new Grid("promptModalOverlay").addRowDefinition(1).addColumnDefinition(1);
@@ -466,6 +513,7 @@ HavokPhysics().then((hp) => {
       promptModalOverlayGrid.isPointerBlocker = true;
       promptModalOverlayGui.addControl(promptModalOverlayGrid);
       const escapeObs = scene.onKeyboardObservable.add((ev) => {
+        appInsights.trackEvent({ name: "promptModalEscPressed" });
         if (ev.type === KeyboardEventTypes.KEYDOWN && ev.event.key === "Escape") {
           promptModalOverlayGui.dispose();
         }
@@ -496,6 +544,7 @@ HavokPhysics().then((hp) => {
       promptModalCloseButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
       promptModalCloseButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
       promptModalCloseButton.onPointerClickObservable.addOnce(() => {
+        appInsights.trackEvent({ name: "promptModalCloseButtonClicked" });
         promptModalOverlayGui.dispose();
       });
       promptModalRectancle.addControl(promptModalCloseButton);
@@ -533,6 +582,7 @@ HavokPhysics().then((hp) => {
         promptModalSelectModelRadioButton.isChecked = mlcModel === formSelectedModel;
         promptModalSelectModelRadioButton.onIsCheckedChangedObservable.add((v) => {
           if (v) {
+            appInsights.trackEvent({ name: "promptModalSelectModelRadioButtonClicked" }, { mlcModel });
             formSelectedModel = mlcModel;
           }
         });
@@ -589,6 +639,7 @@ HavokPhysics().then((hp) => {
     promptInputText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     promptInputText.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     promptInputText.onEnterPressedObservable.add(async () => {
+      appInsights.trackEvent({ name: "promptInputTextEnterPressed" }, { promptInputText: promptInputText.text });
       const promptUserMessage = promptInputText.text;
       promptInputText.text = "";
       promptInputText.isVisible = false;

@@ -8,12 +8,17 @@ import {
   MLCEngineInterface,
 } from "@mlc-ai/web-llm";
 import { SlopTool } from "./slop-tool";
+import appInsights, { trackError } from "./telemetry";
+import { SeverityLevel } from "@microsoft/applicationinsights-web";
 
 export const SLOP_LLM_MLCMODELS = ["Llama-3.2-1B-Instruct-q4f16_1-MLC", "Llama-3.2-1B-Instruct-q4f32_1-MLC", "Hermes-3-Llama-3.1-8B-q4f16_1-MLC"] as const;
 export type SlopLLMMLCModel = (typeof SLOP_LLM_MLCMODELS)[number];
 
 export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (progress: InitProgressReport) => void): Promise<MLCEngineInterface | false> {
+  appInsights.trackTrace({ message: "initializing MLC engine", severityLevel: SeverityLevel.Information });
+
   if (!("serviceWorker" in navigator)) {
+    appInsights.trackTrace({ message: "sw not supported", severityLevel: SeverityLevel.Error });
     console.error("SLOP: sw not supported");
     return false;
   }
@@ -23,23 +28,25 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
       navigator.serviceWorker.ready,
       new Promise<never>((_, rej) => {
         setTimeout(() => {
-          rej(new Error("Service Worker failed to activate (likely unsupported browser)"));
+          appInsights.trackTrace({ message: "sw failed to activate (likely unsupported browser)", severityLevel: SeverityLevel.Error });
+          rej(new Error("sw failed to activate (likely unsupported browser)"));
         }, 10000);
       }),
     ]);
 
     if (!registration.active) {
+      appInsights.trackTrace({ message: "sw not active", severityLevel: SeverityLevel.Error });
       console.error("SLOP: sw not active");
       return false;
     }
 
-    await new Promise((resolve) => {
+    await new Promise((res) => {
       if (registration.active?.state === "activated") {
-        setTimeout(resolve, 200);
+        setTimeout(res, 200);
       } else {
         const checkActivation = () => {
           if (registration.active?.state === "activated") {
-            setTimeout(resolve, 200);
+            setTimeout(res, 200);
           } else {
             setTimeout(checkActivation, 50);
           }
@@ -52,15 +59,20 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
     const engine = await Promise.race([
       CreateServiceWorkerMLCEngine(model, {
         initProgressCallback: (p) => {
-          engineCreationOk = true;
+          if (!engineCreationOk) {
+            appInsights.trackTrace({ message: "engineCreationOk", severityLevel: SeverityLevel.Information });
+            engineCreationOk = true;
+          }
           onProgress(p);
         },
       }),
       new Promise<never>((_, rej) => {
         setTimeout(() => {
           if (!engineCreationOk) {
+            appInsights.trackTrace({ message: "No progress after 10s, unregistering SW and reloading...", severityLevel: SeverityLevel.Warning });
             console.log("SLOP: No progress after 10s, unregistering SW and reloading...");
             setTimeout(() => {
+              appInsights.trackTrace({ message: "MLC engine creation timeout", severityLevel: SeverityLevel.Error });
               rej(new Error("MLC engine creation timeout"));
             }, 5000);
             registration.unregister().then(() => {
@@ -73,20 +85,25 @@ export async function initMLCEngineOrFalse(model: SlopLLMMLCModel, onProgress: (
     engineCreationOk = true;
 
     try {
-      await engine.runtimeStatsText(model);
+      const runtimeStatsText = await engine.runtimeStatsText(model);
+      appInsights.trackTrace({ message: "runtimeStatsText", severityLevel: SeverityLevel.Information }, { value: runtimeStatsText });
     } catch (error) {
+      trackError(error, SeverityLevel.Warning, "model not loaded, reloading...");
       console.error("SLOP: model not loaded, reloading...");
       console.error(error);
       await engine.unload();
       await engine.reload(model);
-      await engine.runtimeStatsText(model);
+      const runtimeStatsText2 = await engine.runtimeStatsText(model);
+      appInsights.trackTrace({ message: "runtimeStatsText2", severityLevel: SeverityLevel.Information }, { value: runtimeStatsText2 });
     }
 
     return engine;
   } catch (error) {
     if ((((error as any).message ?? error) as string)?.includes("aborted")) {
+      trackError(error, SeverityLevel.Warning, "mlc download was aborted (likely due to model switch)");
       console.error("SLOP: mlc download was aborted (likely due to model switch)");
     } else {
+      trackError(error, SeverityLevel.Error, "mlc engine failed");
       console.error("SLOP: mlc engine failed");
     }
     console.error(error);
