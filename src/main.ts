@@ -33,8 +33,8 @@ import { GridMaterial } from "@babylonjs/materials";
 import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 import appInsights from "./telemetry";
-import myShaderFrag from "./shaders/myShader.frag";
-import myShaderVert from "./shaders/myShader.vert";
+import blockFrag from "./shaders/block.frag";
+import blockVert from "./shaders/block.vert";
 
 // NOTE: Don't add top-level awaits for compatibility.
 
@@ -47,6 +47,14 @@ HavokPhysics().then((hp) => {
   scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
   hk.setTimeStep(hkTimeStep);
   const physicsViewer = new PhysicsViewer(scene);
+
+  let retrofitEnabled = true;
+  const updateMaterialActions: (() => void)[] = [];
+  function updateMaterials() {
+    for (const a of updateMaterialActions) {
+      a();
+    }
+  }
 
   appInsights.trackEvent(
     { name: "pageLoaded" },
@@ -80,7 +88,7 @@ HavokPhysics().then((hp) => {
   const groundMat = new GridMaterial("groundMat", scene);
   groundMat.lineColor = Color3.Teal();
   groundMat.gridRatio = 1;
-  groundMat.backFaceCulling = false;
+  groundMat.backFaceCulling = true;
   ground.material = groundMat;
 
   const wasdKeysDown = { w: false, a: false, s: false, d: false };
@@ -196,25 +204,30 @@ HavokPhysics().then((hp) => {
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
   new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.8, restitution: 0 }, scene);
-  // const blockMat = new GridMaterial("blockMat", scene);
-  // blockMat.lineColor = Color3.Yellow();
-  // blockMat.gridRatio = 0.5;
-  // block.material = blockMat;
-  ShaderStore.ShadersStore["myShaderFragmentShader"] = myShaderFrag;
-  ShaderStore.ShadersStore["myShaderVertexShader"] = myShaderVert;
-  const blockMat = new ShaderMaterial(
-    "blockMat",
+  const blockGridMat = new GridMaterial("blockGridMat", scene);
+  blockGridMat.lineColor = Color3.Yellow();
+  blockGridMat.gridRatio = 0.5;
+  ShaderStore.ShadersStore["blockFragmentShader"] = blockFrag;
+  ShaderStore.ShadersStore["blockVertexShader"] = blockVert;
+  const blockShaderMat = new ShaderMaterial(
+    "blockShaderMat",
     scene,
     {
-      fragment: "myShader",
-      vertex: "myShader",
+      fragment: "block",
+      vertex: "block",
     },
     {
       attributes: ["position", "normal", "uv"],
       uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"],
     }
   );
-  block.material = blockMat;
+  updateMaterialActions.push(() => {
+    if (retrofitEnabled) {
+      block.material = blockShaderMat;
+    } else {
+      block.material = blockGridMat;
+    }
+  });
 
   for (let i = 0; i < 10; i++) {
     const slope = MeshBuilder.CreateBox(`slope${i}`, { width: 24, height: 0.5, depth: 3 }, scene);
@@ -434,6 +447,35 @@ HavokPhysics().then((hp) => {
   debugToggleXYZIndicatorTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   debugToggleXYZIndicatorTextBlock.paddingLeftInPixels = 5;
   debugToggleXYZIndicatorPanel.addControl(debugToggleXYZIndicatorTextBlock);
+
+  const debugToggleRetroFitPanel = new StackPanel();
+  debugToggleRetroFitPanel.widthInPixels = debugPanelTextWidth;
+  debugToggleRetroFitPanel.heightInPixels = 30;
+  debugToggleRetroFitPanel.isVertical = false;
+  debugToggleRetroFitPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugToggleRetroFitPanel.paddingLeftInPixels = 5;
+  debugPanel.addControl(debugToggleRetroFitPanel);
+  const debugToggleRetroFitCheckbox = new Checkbox("toggleRetroFitCheckbox");
+  debugToggleRetroFitCheckbox.color = "white";
+  debugToggleRetroFitCheckbox.fontSize = 20;
+  debugToggleRetroFitCheckbox.isChecked = retrofitEnabled;
+  debugToggleRetroFitCheckbox.widthInPixels = debugPanelCheckBoxWidth;
+  debugToggleRetroFitCheckbox.heightInPixels = 20;
+  debugToggleRetroFitCheckbox.onIsCheckedChangedObservable.add((v, ev) => {
+    appInsights.trackEvent({ name: "debugToggleRetroFitCheckboxClicked" }, { value: v });
+    ev.skipNextObservers = true;
+    retrofitEnabled = v;
+    updateMaterials();
+  });
+  debugToggleRetroFitPanel.addControl(debugToggleRetroFitCheckbox);
+  const debugToggleRetroFitTextBlock = new TextBlock("toggleRetroFitTextBlock", "RetroFit");
+  debugToggleRetroFitTextBlock.widthInPixels = debugPanelTextWidth;
+  debugToggleRetroFitTextBlock.heightInPixels = 30;
+  debugToggleRetroFitTextBlock.color = "white";
+  debugToggleRetroFitTextBlock.fontSize = 20;
+  debugToggleRetroFitTextBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  debugToggleRetroFitTextBlock.paddingLeftInPixels = 5;
+  debugToggleRetroFitPanel.addControl(debugToggleRetroFitTextBlock);
 
   const debugGuiTextBlock1 = new TextBlock("debug1", "debug1");
   debugGuiTextBlock1.height = "30px";
@@ -710,6 +752,8 @@ HavokPhysics().then((hp) => {
       return false;
     };
   }
+
+  updateMaterials();
 
   const onBeforeRenderObservableEveryQrtrSecond = createThrottler(250);
   const onBeforeRenderObservableEveryHalfSecond = createThrottler(500);
