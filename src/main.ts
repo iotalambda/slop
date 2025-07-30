@@ -21,6 +21,7 @@ import {
   Quaternion,
   Scene,
   ShaderMaterial,
+  ShaderStore,
   StandardMaterial,
   UniversalCamera,
   Vector3,
@@ -32,6 +33,8 @@ import { GridMaterial } from "@babylonjs/materials";
 import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } from "./slop-llm";
 import { SlopTool } from "./slop-tool";
 import appInsights from "./telemetry";
+import myShaderFrag from "./shaders/myShader.frag";
+import myShaderVert from "./shaders/myShader.vert";
 
 // NOTE: Don't add top-level awaits for compatibility.
 
@@ -197,10 +200,20 @@ HavokPhysics().then((hp) => {
   // blockMat.lineColor = Color3.Yellow();
   // blockMat.gridRatio = 0.5;
   // block.material = blockMat;
-  const blockMat = new ShaderMaterial("blockMat", scene, "./shaders/myShader", {
-    attributes: ["position", "normal", "uv"],
-    uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"],
-  });
+  ShaderStore.ShadersStore["myShaderFragmentShader"] = myShaderFrag;
+  ShaderStore.ShadersStore["myShaderVertexShader"] = myShaderVert;
+  const blockMat = new ShaderMaterial(
+    "blockMat",
+    scene,
+    {
+      fragment: "myShader",
+      vertex: "myShader",
+    },
+    {
+      attributes: ["position", "normal", "uv"],
+      uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"],
+    }
+  );
   block.material = blockMat;
 
   for (let i = 0; i < 10; i++) {
