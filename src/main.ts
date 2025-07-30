@@ -20,6 +20,7 @@ import {
   PhysicsViewer,
   Quaternion,
   Scene,
+  ShaderMaterial,
   StandardMaterial,
   UniversalCamera,
   Vector3,
@@ -192,9 +193,14 @@ HavokPhysics().then((hp) => {
   const block = MeshBuilder.CreateBox("block", { size: 7 }, scene);
   block.position = new Vector3(0, 3.5, 5);
   new PhysicsAggregate(block, PhysicsShapeType.BOX, { mass: 0, friction: 0.8, restitution: 0 }, scene);
-  const blockMat = new GridMaterial("blockMat", scene);
-  blockMat.lineColor = Color3.Yellow();
-  blockMat.gridRatio = 0.5;
+  // const blockMat = new GridMaterial("blockMat", scene);
+  // blockMat.lineColor = Color3.Yellow();
+  // blockMat.gridRatio = 0.5;
+  // block.material = blockMat;
+  const blockMat = new ShaderMaterial("blockMat", scene, "./shaders/myShader", {
+    attributes: ["position", "normal", "uv"],
+    uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"],
+  });
   block.material = blockMat;
 
   for (let i = 0; i < 10; i++) {
@@ -332,7 +338,7 @@ HavokPhysics().then((hp) => {
 
   const debugGui = AdvancedDynamicTexture.CreateFullscreenUI("gui", true, scene);
 
-  const versionTextBlock = new TextBlock("versionTextBlock", "version 3");
+  const versionTextBlock = new TextBlock("versionTextBlock", "version 4");
   versionTextBlock.heightInPixels = 30;
   versionTextBlock.color = "white";
   versionTextBlock.fontSize = 20;
