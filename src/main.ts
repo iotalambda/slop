@@ -23,6 +23,7 @@ import {
   ShaderMaterial,
   ShaderStore,
   StandardMaterial,
+  Texture,
   UniversalCamera,
   Vector3,
 } from "@babylonjs/core";
@@ -34,7 +35,7 @@ import { initMLCEngineOrFalse, SLOP_LLM_MLCMODELS, SlopLLM, SlopLLMMLCModel } fr
 import { SlopTool } from "./slop-tool";
 import appInsights from "./telemetry";
 import blockFrag from "./shaders/block.frag";
-import blockVert from "./shaders/block.vert";
+import jitterVert from "./shaders/jitter.vert";
 
 // NOTE: Don't add top-level awaits for compatibility.
 
@@ -208,19 +209,22 @@ HavokPhysics().then((hp) => {
   blockGridMat.lineColor = Color3.Yellow();
   blockGridMat.gridRatio = 0.5;
   ShaderStore.ShadersStore["blockFragmentShader"] = blockFrag;
-  ShaderStore.ShadersStore["blockVertexShader"] = blockVert;
+  ShaderStore.ShadersStore["jitterVertexShader"] = jitterVert;
   const blockShaderMat = new ShaderMaterial(
     "blockShaderMat",
     scene,
     {
       fragment: "block",
-      vertex: "block",
+      vertex: "jitter",
     },
     {
       attributes: ["position", "normal", "uv"],
       uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"],
+      samplers: ["blockTexture"],
     }
   );
+  const blockTexture = new Texture("block-texture.png", scene, undefined, undefined, Texture.NEAREST_SAMPLINGMODE);
+  blockShaderMat.setTexture("blockTexture", blockTexture);
   updateMaterialActions.push(() => {
     if (retrofitEnabled) {
       block.material = blockShaderMat;
